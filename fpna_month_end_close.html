@@ -1373,6 +1373,7 @@ function sortAttn(col){
 }
 function sortIcon(col){return ATTN_SORT.col===col?(ATTN_SORT.dir===-1?'▼':'▲'):'⇅';}
 
+function renderDollarView(threshold,dirFilter){
   threshold=threshold||parseInt(document.getElementById('attn-threshold')?.value||'10');
   dirFilter=dirFilter||document.getElementById('attn-direction')?.value||'';
 
@@ -1437,6 +1438,7 @@ function sortIcon(col){return ATTN_SORT.col===col?(ATTN_SORT.dir===-1?'▼':'▲
       <td style="font-size:10px;color:var(--text2);max-width:160px">${d.why}</td>
     </tr>`;
   }).join('');
+}
 
 function renderCodingIssues(){
   const vendorF=getMS('ms-coding-vendor');
