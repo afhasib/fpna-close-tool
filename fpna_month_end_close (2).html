@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FP&A Month End Close</title>
+<style>
+  :root {
+    --bg:#F7F6F3;--surface:#FFFFFF;--surface2:#F0EFE9;--border:#E2E0D8;--border-strong:#C8C5BB;
+    --text:#1C1B18;--text2:#6B6860;--text3:#9B998F;
+    --accent:#E8612A;--accent-light:#FDF0EB;--accent-border:#F5C4AD;
+    --green:#2A7A4B;--green-light:#EBF7F1;--green-border:#A8D8BE;
+    --red:#C0311F;--red-light:#FDF0EE;--red-border:#F0BDBA;
+    --yellow:#A66B00;--yellow-light:#FDF8EB;--yellow-border:#F0DCAA;
+    --blue:#1A4FA0;--blue-light:#EBF0FD;--blue-border:#B8CCF5;
+    --purple:#6B3FA0;--purple-light:#F3EFFE;--purple-border:#C8B0E8;
+    --r:10px;--rsm:6px;--sh:0 1px 3px rgba(0,0,0,0.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;}
+  .shell{display:flex;height:100vh;overflow:hidden;}
+  .sidebar{width:210px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;}
+  .logo-wrap{padding:16px;border-bottom:1px solid var(--border);}
+  .logo-name{font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:7px;}
+  .logo-dot{width:9px;height:9px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+  .logo-sub{font-size:11px;color:var(--text3);margin-top:2px;padding-left:16px;}
+  nav{flex:1;padding:8px;overflow-y:auto;}
+  .nav-sec{font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:10px 8px 4px;}
+  .nav-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:var(--rsm);cursor:pointer;color:var(--text2);font-size:13px;border:none;background:none;width:100%;text-align:left;transition:all .12s;}
+  .nav-item:hover{background:var(--surface2);color:var(--text);}
+  .nav-item.active{background:var(--accent-light);color:var(--accent);font-weight:500;}
+  .nav-icon{font-size:14px;width:18px;text-align:center;}
+  .nav-badge{margin-left:auto;background:var(--accent);color:#fff;border-radius:20px;padding:1px 6px;font-size:10px;font-weight:700;}
+  .nav-badge.green{background:var(--green);}
+  .main{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+  .topbar-title{font-size:15px;font-weight:600;}
+  .topbar-sub{font-size:11px;color:var(--text3);margin-top:1px;}
+  .content{padding:18px 24px;flex:1;}
+  /* Buttons */
+  .btn{padding:7px 13px;border-radius:var(--rsm);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:all .12s;font-family:inherit;}
+  .btn:hover{background:var(--surface2);}
+  .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn-primary:hover{opacity:.88;}
+  .btn-sm{padding:4px 9px;font-size:11px;}
+  .btn-green{border-color:var(--green-border);color:var(--green);background:var(--green-light);}
+  .btn-red{border-color:var(--red-border);color:var(--red);background:var(--red-light);}
+  /* Cards */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;box-shadow:var(--sh);}
+  .card-title{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;}
+  /* Stats */
+  .stats{display:grid;gap:10px;margin-bottom:14px;}
+  .s4{grid-template-columns:repeat(4,1fr);}
+  .s3{grid-template-columns:repeat(3,1fr);}
+  .s5{grid-template-columns:repeat(5,1fr);}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;}
+  .stat-label{font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;}
+  .stat-value{font-size:20px;font-weight:600;}
+  .stat-sub{font-size:10px;color:var(--text3);margin-top:2px;}
+  .sv-green .stat-value{color:var(--green);}
+  .sv-red .stat-value{color:var(--red);}
+  .sv-accent .stat-value{color:var(--accent);}
+  .sv-yellow .stat-value{color:var(--yellow);}
+  .sv-purple .stat-value{color:var(--purple);}
+  /* Upload */
+  .upload-zone{border:1.5px dashed var(--border-strong);border-radius:var(--r);padding:24px 16px;text-align:center;cursor:pointer;background:var(--surface);transition:all .15s;}
+  .upload-zone:hover{border-color:var(--accent);background:var(--accent-light);}
+  .upload-zone input{display:none;}
+  /* Filters */
+  .filter-bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center;}
+  .filter-label{font-size:11px;color:var(--text3);font-weight:600;white-space:nowrap;}
+  select,input[type=text],textarea{padding:5px 9px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--surface);color:var(--text);font-size:12px;font-family:inherit;}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:var(--accent);}
+  /* Table */
+  .table-wrap{overflow-x:auto;border-radius:var(--r);border:1px solid var(--border);background:var(--surface);}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  thead th{padding:8px 11px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);background:var(--surface2);white-space:nowrap;position:sticky;top:0;z-index:1;}
+  tbody td{padding:8px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover td{background:var(--surface2);}
+  .td-r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .td-m{color:var(--text3);}
+  /* Badges */
+  .badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.02em;white-space:nowrap;}
+  .b-high{background:var(--red-light);color:var(--red);border:1px solid var(--red-border);}
+  .b-med{background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border);}
+  .b-low{background:var(--green-light);color:var(--green);border:1px solid var(--green-border);}
+  .b-none{background:var(--surface2);color:var(--text3);border:1px solid var(--border);}
+  .b-app{background:var(--green-light);color:var(--green);border:1px solid var(--green-border);}
+  .b-rej{background:var(--red-light);color:var(--red);border:1px solid var(--red-border);}
+  .b-over{background:var(--red-light);color:var(--red);border:1px solid var(--red-border);}
+  .b-under{background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border);}
+  .b-on{background:var(--green-light);color:var(--green);border:1px solid var(--green-border);}
+  .b-attn{background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border);}
+  /* Alerts */
+  .alert{padding:9px 13px;border-radius:var(--rsm);font-size:12px;margin-bottom:12px;}
+  .al-info{background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-border);}
+  .al-warn{background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border);}
+  .al-ok{background:var(--green-light);color:var(--green);border:1px solid var(--green-border);}
+  /* Accrual cards */
+  .acc-card{border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:8px;background:var(--surface);}
+  .acc-card.approved{border-color:var(--green-border);background:var(--green-light);}
+  .acc-card.rejected{opacity:.4;}
+  .acc-top{display:flex;align-items:flex-start;gap:12px;}
+  .acc-info{flex:1;min-width:0;}
+  .acc-vendor{font-weight:700;font-size:13px;margin-bottom:3px;}
+  .acc-meta{font-size:11px;color:var(--text3);display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+  .acc-amounts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;background:var(--surface2);border-radius:var(--rsm);padding:10px;margin-top:8px;}
+  .acc-amt-cell{text-align:center;}
+  .acc-amt-label{font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;}
+  .acc-amt-val{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .acc-amt-val.highlight{color:var(--accent);}
+  .acc-actions{display:flex;gap:6px;flex-shrink:0;align-items:flex-start;}
+  /* Commentary */
+  .commentary-cell textarea{width:100%;border:1px solid var(--border);border-radius:var(--rsm);padding:5px 8px;font-size:11px;font-family:inherit;resize:vertical;min-height:50px;background:var(--surface);}
+  .commentary-cell textarea:focus{outline:none;border-color:var(--accent);}
+  .commentary-cell textarea.auto-gen{background:var(--blue-light);color:var(--blue);border-color:var(--blue-border);}
+  .commentary-cell textarea.user-edited{background:var(--surface);border-color:var(--green-border);}
+  /* Multi-select filter pill */
+  .ms-wrap{position:relative;display:inline-block;}
+  .ms-btn{padding:5px 9px;border:1px solid var(--border);border-radius:var(--rsm);background:var(--surface);color:var(--text);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap;font-family:inherit;}
+  .ms-btn:hover{background:var(--surface2);}
+  .ms-btn.active{border-color:var(--accent);background:var(--accent-light);color:var(--accent);}
+  .ms-dropdown{position:absolute;top:calc(100% + 4px);left:0;z-index:999;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:220px;max-width:280px;display:none;}
+  .ms-dropdown.open{display:block;}
+  .ms-search{padding:7px 10px;border-bottom:1px solid var(--border);}
+  .ms-search input{width:100%;border:1px solid var(--border);border-radius:var(--rsm);padding:4px 8px;font-size:12px;font-family:inherit;}
+  .ms-list{max-height:220px;overflow-y:auto;}
+  .ms-item{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:12px;}
+  .ms-item:hover{background:var(--surface2);}
+  .ms-item input[type=checkbox]{cursor:pointer;accent-color:var(--accent);}
+  .ms-footer{padding:6px 10px;border-top:1px solid var(--border);display:flex;gap:6px;}
+  .ms-footer button{font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-family:inherit;}
+  .ms-footer button:hover{background:var(--surface2);}
+  /* Needs Attention redesigned table */
+  .attn-grid{display:grid;gap:1px;background:var(--border);}
+  .attn-period-col{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;}
+  .spark-mini{display:flex;align-items:flex-end;gap:2px;height:32px;}
+  .spark-mini-bar{border-radius:2px 2px 0 0;min-width:8px;flex:1;}
+  /* Sparkline */
+  .sparkline-wrap{overflow-x:auto;}
+  .sparkline{display:flex;align-items:flex-end;gap:3px;height:70px;min-width:280px;}
+  .spark-col{display:flex;flex-direction:column;align-items:center;flex:1;min-width:22px;}
+  .spark-bar{width:100%;border-radius:3px 3px 0 0;}
+  .spark-lbl{font-size:9px;color:var(--text3);margin-top:2px;}
+  /* Bar charts */
+  .bar-chart{display:flex;flex-direction:column;gap:7px;}
+  .bar-row{display:flex;align-items:center;gap:8px;}
+  .bar-lbl{width:160px;font-size:11px;color:var(--text2);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;}
+  .bar-track{flex:1;height:16px;background:var(--surface2);border-radius:4px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:4px;}
+  .bar-val{width:80px;font-size:11px;color:var(--text3);text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums;}
+  /* Tag */
+  .tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;background:var(--accent-light);color:var(--accent);border:1px solid var(--accent-border);}
+  .tag-gl{background:var(--blue-light);color:var(--blue);border-color:var(--blue-border);}
+  .tag-bu{background:var(--purple-light);color:var(--purple);border-color:var(--purple-border);}
+  /* Misc */
+  .page{display:none;}.page.active{display:block;}
+  .inner-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:14px;}
+  .inner-tab{padding:6px 13px;font-size:12px;cursor:pointer;border:none;background:none;color:var(--text3);border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit;}
+  .inner-tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+  .empty{text-align:center;padding:40px 20px;color:var(--text3);}
+  .empty h3{font-size:14px;font-weight:500;color:var(--text2);margin-bottom:4px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+  .mb12{margin-bottom:12px;}.mb16{margin-bottom:16px;}
+  .ml-auto{margin-left:auto;}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .var-pos{color:var(--red);font-weight:600;}
+  .var-neg{color:var(--green);font-weight:600;}
+  ::-webkit-scrollbar{width:4px;height:4px;}
+  ::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:3px;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="logo-wrap">
+      <div class="logo-name"><span class="logo-dot"></span>FP&A Month End Close</div>
+      <div class="logo-sub">Chegg Finance</div>
+    </div>
+    <nav>
+      <div class="nav-sec">Data</div>
+      <button class="nav-item active" onclick="goTo('upload')"><span class="nav-icon">📂</span>Upload Data</button>
+      <div class="nav-sec">Analysis</div>
+      <button class="nav-item" onclick="goTo('actuals')"><span class="nav-icon">📊</span>AP Actuals</button>
+      <button class="nav-item" onclick="goTo('fcst')"><span class="nav-icon">🎯</span>Fcst vs Actuals</button>
+      <button class="nav-item" onclick="goTo('future')"><span class="nav-icon">📅</span>Future Forecast</button>
+      <button class="nav-item" onclick="goTo('accruals')"><span class="nav-icon">✅</span>Accruals <span class="nav-badge" id="badge-accruals" style="display:none">0</span></button>
+      <button class="nav-item" onclick="goTo('approved')"><span class="nav-icon">📋</span>Current Month Accruals <span class="nav-badge green" id="badge-approved" style="display:none">0</span></button>
+      <button class="nav-item" onclick="goTo('attention')"><span class="nav-icon">⚠️</span>Needs Attention <span class="nav-badge" id="badge-attn" style="display:none">0</span></button>
+      <div class="nav-sec">Reports</div>
+      <button class="nav-item" onclick="goTo('sot')"><span class="nav-icon">🗂</span>Source of Truth</button>
+    </nav>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="page-title">Upload Data</div>
+        <div class="topbar-sub" id="page-sub">Load AP Details and Forecast exports from Adaptive / NetSuite</div>
+      </div>
+    </div>
+    <div class="content">
+
+      <!-- UPLOAD -->
+      <div class="page active" id="page-upload">
+        <div class="alert al-info mb12" style="font-size:12px">💡 <strong>Tip:</strong> Save this file to a fixed location (e.g. <code>Desktop/FPnA Tool/fpna_month_end_close.html</code>) and always open it from that same location. Your data is stored in the browser tied to the file path — moving or renaming the file will require re-uploading your CSVs.</div>
+        <div class="grid2">
+          <div>
+            <div class="card mb12">
+              <div class="card-title">AP Details — NetSuite Export (12+ months)</div>
+              <div class="upload-zone" onclick="document.getElementById('ap-inp').click()">
+                <input type="file" id="ap-inp" accept=".csv" onchange="handleAP(event)">
+                <div style="font-size:28px;margin-bottom:8px">📄</div>
+                <div style="font-weight:600;margin-bottom:4px">Upload AP Details CSV</div>
+                <div style="font-size:11px;color:var(--text3)">Subsidiary · Period · Vendor · Account · Amount · Department · Class · Memo · Type · Coupa PO · Budget ID · Entity · Cost Center · Project · Invoice Type</div>
+              </div>
+              <div id="ap-fb" style="margin-top:8px;display:none"></div>
+            </div>
+            <div class="card" id="ap-stat-card" style="display:none">
+              <div class="card-title">AP Data Loaded</div>
+              <div class="stats s3" style="margin-bottom:0">
+                <div class="stat"><div class="stat-label">Records</div><div class="stat-value" id="ap-s-rec">—</div></div>
+                <div class="stat"><div class="stat-label">Periods</div><div class="stat-value" id="ap-s-per">—</div></div>
+                <div class="stat"><div class="stat-label">Vendors</div><div class="stat-value" id="ap-s-ven">—</div></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card mb12">
+              <div class="card-title">Forecast — Adaptive (M7 or latest version, wide format)</div>
+              <div class="upload-zone" onclick="document.getElementById('fc-inp').click()">
+                <input type="file" id="fc-inp" accept=".csv" onchange="handleFcst(event)">
+                <div style="font-size:28px;margin-bottom:8px">📋</div>
+                <div style="font-weight:600;margin-bottom:4px">Upload Forecast CSV</div>
+                <div style="font-size:11px;color:var(--text3)">GL Code · GL Name · BU · Cost Center · Vendor FP&A · Budget ID · Comments · Jan-2026 · Feb-2026 · …</div>
+              </div>
+              <div id="fc-fb" style="margin-top:8px;display:none"></div>
+            </div>
+            <div class="card" id="fc-stat-card" style="display:none">
+              <div class="card-title">Forecast Loaded</div>
+              <div class="stats s3" style="margin-bottom:0">
+                <div class="stat"><div class="stat-label">Rows</div><div class="stat-value" id="fc-s-row">—</div></div>
+                <div class="stat"><div class="stat-label">GL Codes</div><div class="stat-value" id="fc-s-gl">—</div></div>
+                <div class="stat"><div class="stat-label">Months</div><div class="stat-value" id="fc-s-mon">—</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Upload History</div>
+          <div id="upload-hist"><div class="empty" style="padding:16px"><p>No uploads yet.</p></div></div>
+          <div style="margin-top:10px;text-align:right">
+            <button class="btn btn-sm" style="color:var(--red);border-color:var(--red-border)" onclick="clearAll()">Clear all data</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AP ACTUALS -->
+      <div class="page" id="page-actuals">
+        <div id="act-empty" class="empty" style="display:none"><h3>Upload AP Details first</h3></div>
+        <div id="act-content">
+          <div class="stats s4 mb12">
+            <div class="stat sv-accent"><div class="stat-label">Total Spend</div><div class="stat-value" id="a-total">—</div></div>
+            <div class="stat"><div class="stat-label">Transactions</div><div class="stat-value" id="a-txns">—</div></div>
+            <div class="stat"><div class="stat-label">Vendors</div><div class="stat-value" id="a-vends">—</div></div>
+            <div class="stat"><div class="stat-label">Periods</div><div class="stat-value" id="a-pers">—</div></div>
+          </div>
+          <div class="card mb12">
+            <div class="card-title">Monthly Spend</div>
+            <div class="sparkline-wrap"><div class="sparkline" id="a-spark"></div></div>
+          </div>
+          <div class="filter-bar">
+            <span class="filter-label">Filter:</span>
+            <div class="ms-wrap" id="ms-af-period"><button class="ms-btn" onclick="toggleMS('ms-af-period')">Period <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-af-period')">All</button><button onclick="clearMS('ms-af-period')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-af-sub"><button class="ms-btn" onclick="toggleMS('ms-af-sub')">Subsidiary <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-af-sub')">All</button><button onclick="clearMS('ms-af-sub')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-af-dept"><button class="ms-btn" onclick="toggleMS('ms-af-dept')">Department <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-af-dept')">All</button><button onclick="clearMS('ms-af-dept')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-af-vendor"><button class="ms-btn" onclick="toggleMS('ms-af-vendor')">Vendor <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-af-vendor')">All</button><button onclick="clearMS('ms-af-vendor')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-af-gl"><button class="ms-btn" onclick="toggleMS('ms-af-gl')">GL Code <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-af-gl')">All</button><button onclick="clearMS('ms-af-gl')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-af-class"><button class="ms-btn" onclick="toggleMS('ms-af-class')">Class <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-af-class')">All</button><button onclick="clearMS('ms-af-class')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-af-cc"><button class="ms-btn" onclick="toggleMS('ms-af-cc')">Cost Center <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-af-cc')">All</button><button onclick="clearMS('ms-af-cc')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-af-type"><button class="ms-btn" onclick="toggleMS('ms-af-type')">Type <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-af-type')">All</button><button onclick="clearMS('ms-af-type')">None</button></div></div></div>
+            <button class="btn btn-sm ml-auto" onclick="clearAllMS('af');renderActuals()">Clear</button>
+            <button class="btn btn-sm" onclick="expActuals()">Export CSV</button>
+          </div>
+          <div class="inner-tabs">
+            <button class="inner-tab active" onclick="switchAV('summary')">Summary</button>
+            <button class="inner-tab" onclick="switchAV('detail')">Transaction Detail</button>
+          </div>
+          <div id="av-summary">
+            <div class="grid2">
+              <div class="card"><div class="card-title">Top Vendors</div><div class="bar-chart" id="bars-vendor"></div></div>
+              <div class="card"><div class="card-title">Top GL Codes</div><div class="bar-chart" id="bars-gl"></div></div>
+            </div>
+            <div class="card"><div class="card-title">By Department</div><div class="bar-chart" id="bars-dept"></div></div>
+          </div>
+          <div id="av-detail" style="display:none">
+            <div class="table-wrap">
+              <table><thead><tr><th>Period</th><th>Subsidiary</th><th>Vendor</th><th>GL Code</th><th>Dept</th><th>Cost Center</th><th>Entity</th><th>Class</th><th>Type</th><th>Memo</th><th class="td-r">Amount USD</th></tr></thead>
+              <tbody id="a-tbody"></tbody></table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FCST VS ACTUALS -->
+      <div class="page" id="page-fcst">
+        <div id="fv-empty" class="empty" style="display:none"><h3>Upload both AP and Forecast data</h3><p>Go to Upload Data tab.</p></div>
+        <div id="fv-content">
+          <div class="alert al-info mb12">Commentary is auto-generated by GL Account Name. Click any commentary to edit. Blue = auto-generated · Green border = user-edited.</div>
+          <div class="filter-bar">
+            <span class="filter-label">Period:</span>
+            <select id="fv-period" onchange="renderFcstVsAct()"><option value="">Select period</option></select>
+            <div class="ms-wrap" id="ms-fv-bu"><button class="ms-btn" onclick="toggleMS('ms-fv-bu')">BU <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fv-bu')">All</button><button onclick="clearMS('ms-fv-bu')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-fv-cc"><button class="ms-btn" onclick="toggleMS('ms-fv-cc')">Cost Center <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fv-cc')">All</button><button onclick="clearMS('ms-fv-cc')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-fv-dept"><button class="ms-btn" onclick="toggleMS('ms-fv-dept')">Department <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fv-dept')">All</button><button onclick="clearMS('ms-fv-dept')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-fv-gl"><button class="ms-btn" onclick="toggleMS('ms-fv-gl')">GL Code <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fv-gl')">All</button><button onclick="clearMS('ms-fv-gl')">None</button></div></div></div>
+            <button class="btn btn-sm ml-auto" onclick="expFcst()">Export CSV</button>
+          </div>
+          <div class="stats s4 mb12">
+            <div class="stat"><div class="stat-label">Forecast</div><div class="stat-value" id="fv-fcst">—</div></div>
+            <div class="stat"><div class="stat-label">Actuals</div><div class="stat-value" id="fv-act">—</div></div>
+            <div class="stat sv-red"><div class="stat-label">Variance $</div><div class="stat-value" id="fv-var">—</div></div>
+            <div class="stat"><div class="stat-label">Variance %</div><div class="stat-value" id="fv-pct">—</div></div>
+          </div>
+          <div id="fv-alert" style="display:none" class="alert al-warn mb12"></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>GL Code</th><th>GL Account Name</th><th>BU</th><th>Cost Center</th><th>Dept</th><th>Vendor (FP&A)</th><th class="td-r">Forecast</th><th class="td-r">Actuals</th><th class="td-r">Variance $</th><th class="td-r">Variance %</th><th>Status</th><th style="min-width:220px">Variance Commentary</th></tr></thead>
+              <tbody id="fv-tbody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:8px;text-align:right"><button class="btn btn-sm btn-primary" onclick="saveCommentaries()">Save All Commentaries</button></div>
+        </div>
+      </div>
+
+      <!-- FUTURE FORECAST -->
+      <div class="page" id="page-future">
+        <div id="fut-empty" class="empty" style="display:none"><h3>Upload Forecast data first</h3></div>
+        <div id="fut-content">
+          <div class="alert al-info mb12">Forecast months with no actuals yet. Review against historical trends to determine if updates are needed.</div>
+          <div class="filter-bar">
+            <div class="ms-wrap" id="ms-fut-gl"><button class="ms-btn" onclick="toggleMS('ms-fut-gl')">GL Code <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fut-gl')">All</button><button onclick="clearMS('ms-fut-gl')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-fut-bu"><button class="ms-btn" onclick="toggleMS('ms-fut-bu')">BU <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fut-bu')">All</button><button onclick="clearMS('ms-fut-bu')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-fut-dept"><button class="ms-btn" onclick="toggleMS('ms-fut-dept')">Department <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fut-dept')">All</button><button onclick="clearMS('ms-fut-dept')">None</button></div></div></div>
+            <button class="btn btn-sm ml-auto" onclick="expFuture()">Export CSV</button>
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr id="fut-thead"></tr></thead><tbody id="fut-tbody"></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACCRUALS -->
+      <div class="page" id="page-accruals">
+        <div id="acc-empty" class="empty" style="display:none"><h3>Need AP actuals data</h3><p>Upload at least 3 months of AP Details.</p></div>
+        <div id="acc-content">
+          <div class="alert al-info mb12">Accrual risk is adjusted by forecast: if actuals are below historical average but forecast also calls for lower spend, risk is reduced. Shows current month, prior month, and 6-month average side by side.</div>
+          <div class="filter-bar">
+            <span class="filter-label">Close period:</span>
+            <select id="acc-period" onchange="renderAccruals()"><option value="">Select period</option></select>
+            <select id="acc-conf" onchange="renderAccruals()"><option value="">All risk levels</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+            <div class="ms-wrap" id="ms-acc-vendor"><button class="ms-btn" onclick="toggleMS('ms-acc-vendor')">Vendor <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-acc-vendor')">All</button><button onclick="clearMS('ms-acc-vendor')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-acc-dept"><button class="ms-btn" onclick="toggleMS('ms-acc-dept')">Department <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-acc-dept')">All</button><button onclick="clearMS('ms-acc-dept')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-acc-gl"><button class="ms-btn" onclick="toggleMS('ms-acc-gl')">GL Code <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-acc-gl')">All</button><button onclick="clearMS('ms-acc-gl')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-acc-cc"><button class="ms-btn" onclick="toggleMS('ms-acc-cc')">Cost Center <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-acc-cc')">All</button><button onclick="clearMS('ms-acc-cc')">None</button></div></div></div>
+          </div>
+          <div class="stats s5 mb12" id="acc-stats" style="display:none">
+            <div class="stat sv-accent"><div class="stat-label">Suggested Accruals</div><div class="stat-value" id="acc-cnt">—</div></div>
+            <div class="stat"><div class="stat-label">Total Suggested</div><div class="stat-value" id="acc-total">—</div></div>
+            <div class="stat sv-red"><div class="stat-label">High Risk</div><div class="stat-value" id="acc-high">—</div></div>
+            <div class="stat sv-yellow"><div class="stat-label">Medium Risk</div><div class="stat-value" id="acc-med">—</div></div>
+            <div class="stat sv-green"><div class="stat-label">Low Risk</div><div class="stat-value" id="acc-low">—</div></div>
+          </div>
+          <div id="acc-alert" style="display:none"></div>
+          <div id="acc-list"></div>
+          <div id="acc-exp-row" style="display:none;margin-top:12px;text-align:right">
+            <button class="btn btn-primary" onclick="expAccruals()">Export Approved Accruals (JE CSV)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- NEEDS ATTENTION -->
+      <div class="page" id="page-attention">
+        <div id="attn-empty" class="empty" style="display:none"><div class="empty-icon">⚠️</div><h3>Upload both AP and Forecast data</h3><p>Upload AP Details and Adaptive Forecast to surface vendor-level anomalies and coding issues.</p></div>
+        <div id="attn-content">
+
+          <!-- Toggle buttons -->
+          <div style="display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;width:fit-content">
+            <button id="attn-tab-dollar" onclick="switchAttnTab('dollar')" style="padding:9px 20px;font-size:13px;font-weight:600;border:none;background:var(--accent);color:#fff;cursor:pointer;">📊 Forecast Discrepancy</button>
+            <button id="attn-tab-coding" onclick="switchAttnTab('coding')" style="padding:9px 20px;font-size:13px;font-weight:500;border:none;background:var(--surface);color:var(--text2);cursor:pointer;border-left:1px solid var(--border);">🔧 GL / Coding Issues</button>
+          </div>
+
+          <!-- DOLLAR VIEW -->
+          <div id="attn-dollar-view">
+            <div class="stats s4 mb12">
+              <div class="stat sv-purple"><div class="stat-label">Vendors Flagged</div><div class="stat-value" id="attn-total">—</div></div>
+              <div class="stat sv-red"><div class="stat-label">Unfavourable</div><div class="stat-value" id="attn-drift">—</div><div class="stat-sub">Actuals trending above forecast</div></div>
+              <div class="stat sv-green"><div class="stat-label">Favourable</div><div class="stat-value" id="attn-spikes">—</div><div class="stat-sub">Actuals trending below forecast</div></div>
+              <div class="stat sv-accent"><div class="stat-label">Total Variance $</div><div class="stat-value" id="attn-var-total">—</div></div>
+            </div>
+            <div class="filter-bar">
+              <span class="filter-label">Threshold:</span>
+              <select id="attn-threshold" onchange="renderAttention()" style="font-size:12px">
+                <option value="10">≥ 10% variance</option>
+                <option value="20">≥ 20% variance</option>
+                <option value="30">≥ 30% variance</option>
+              </select>
+              <select id="attn-direction" onchange="renderAttention()" style="font-size:12px">
+                <option value="">All directions</option>
+                <option value="unfav">Unfavourable only</option>
+                <option value="fav">Favourable only</option>
+              </select>
+              <div class="ms-wrap" id="ms-attn-vendor"><button class="ms-btn" onclick="toggleMS('ms-attn-vendor')">Vendor <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-attn-vendor')">All</button><button onclick="clearMS('ms-attn-vendor')">None</button></div></div></div>
+              <div class="ms-wrap" id="ms-attn-dept"><button class="ms-btn" onclick="toggleMS('ms-attn-dept')">Department <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-attn-dept')">All</button><button onclick="clearMS('ms-attn-dept')">None</button></div></div></div>
+              <div class="ms-wrap" id="ms-attn-gl"><button class="ms-btn" onclick="toggleMS('ms-attn-gl')">GL Code <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-attn-gl')">All</button><button onclick="clearMS('ms-attn-gl')">None</button></div></div></div>
+              <div class="ms-wrap" id="ms-attn-bu"><button class="ms-btn" onclick="toggleMS('ms-attn-bu')">BU <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-attn-bu')">All</button><button onclick="clearMS('ms-attn-bu')">None</button></div></div></div>
+              <button class="btn btn-sm ml-auto" onclick="expAttn()">Export CSV</button>
+            </div>
+            <div class="table-wrap">
+              <table style="font-size:11px">
+                <thead><tr>
+                  <th style="min-width:140px">Vendor (AP)</th><th style="min-width:120px">Matched Fcst Vendor</th><th>GL Code</th><th style="max-width:120px">GL Name</th><th style="max-width:100px">Department</th><th style="max-width:80px">CC</th><th style="max-width:60px">BU</th>
+                  <th class="td-r" style="color:var(--text3);min-width:72px">Act M-6</th><th class="td-r" style="color:var(--text3);min-width:72px">Act M-5</th><th class="td-r" style="color:var(--text3);min-width:72px">Act M-4</th><th class="td-r" style="color:var(--text3);min-width:72px">Act M-3</th><th class="td-r" style="color:var(--text3);min-width:72px">Act M-2</th><th class="td-r" style="color:var(--text3);min-width:72px">Act M-1</th>
+                  <th class="td-r" style="min-width:80px;font-weight:700;cursor:pointer" onclick="sortAttn('actAvg')">6-Mo Avg Act <span id="si-actAvg" style="font-size:10px">⇅</span></th>
+                  <th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+1</th><th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+2</th><th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+3</th><th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+4</th><th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+5</th><th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+6</th>
+                  <th class="td-r" style="color:var(--blue);min-width:80px;font-weight:700;cursor:pointer" onclick="sortAttn('fcstAvg')">Avg Fcst <span id="si-fcstAvg" style="font-size:10px">⇅</span></th>
+                  <th class="td-r" style="min-width:80px;cursor:pointer" onclick="sortAttn('variance')">Variance $ <span id="si-variance" style="font-size:10px">⇅</span></th>
+                  <th class="td-r" style="min-width:70px;cursor:pointer" onclick="sortAttn('varPct')">Variance % <span id="si-varPct" style="font-size:10px">▼</span></th>
+                  <th style="min-width:90px">Direction</th><th style="min-width:160px">Explanation</th>
+                </tr></thead>
+                <tbody id="attn-drift-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- CODING VIEW -->
+          <div id="attn-coding-view" style="display:none">
+            <div class="stats s3 mb12">
+              <div class="stat sv-yellow"><div class="stat-label">Coding Issues Found</div><div class="stat-value" id="attn-gaps">—</div></div>
+              <div class="stat sv-red"><div class="stat-label">GL Mismatches</div><div class="stat-value" id="attn-gl-cnt">—</div></div>
+              <div class="stat sv-accent"><div class="stat-label">Dept / CC Mismatches</div><div class="stat-value" id="attn-dept-cnt">—</div></div>
+            </div>
+            <div class="filter-bar">
+              <div class="ms-wrap" id="ms-coding-vendor"><button class="ms-btn" onclick="toggleMS('ms-coding-vendor')">Vendor <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-coding-vendor')">All</button><button onclick="clearMS('ms-coding-vendor')">None</button></div></div></div>
+              <select id="coding-issue-type" onchange="renderCodingIssues()" style="font-size:12px"><option value="">All issue types</option><option value="GL Mismatch">GL Mismatch</option><option value="Dept / CC Mismatch">Dept / CC Mismatch</option></select>
+              <button class="btn btn-sm ml-auto" onclick="expCoding()">Export CSV</button>
+            </div>
+            <div class="alert al-warn mb12" style="font-size:12px">These are non-dollar corrections. No financial impact but coding must be aligned between NetSuite and Adaptive for accurate reporting and forecast matching.</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr>
+                  <th>Vendor (AP)</th><th>Matched Fcst Vendor</th><th>Match %</th>
+                  <th>Issue Type</th>
+                  <th>AP GL Code</th><th>Adaptive GL Code</th>
+                  <th>AP Department</th><th>Adaptive Dept / CC</th>
+                  <th style="min-width:200px">Recommendation</th>
+                </tr></thead>
+                <tbody id="attn-gap-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- CURRENT MONTH ACCRUALS -->
+      <div class="page" id="page-approved">
+        <div id="appr-empty" class="empty" style="display:none">
+          <div class="empty-icon">📋</div><h3>No approved accruals yet</h3><p>Go to the Accruals tab and approve entries to see them here.</p>
+        </div>
+        <div id="appr-content">
+          <div class="alert al-ok mb12">These are your finalized accruals for the close period. Approve or un-approve entries from the Accruals tab.</div>
+          <div class="stats s4 mb12">
+            <div class="stat sv-green"><div class="stat-label">Approved Entries</div><div class="stat-value" id="appr-count">—</div></div>
+            <div class="stat sv-accent"><div class="stat-label">Total Accrual</div><div class="stat-value" id="appr-total">—</div></div>
+            <div class="stat sv-red"><div class="stat-label">High Risk</div><div class="stat-value" id="appr-high">—</div></div>
+            <div class="stat"><div class="stat-label">Period</div><div class="stat-value" id="appr-period">—</div></div>
+          </div>
+          <div class="filter-bar">
+            <button class="btn btn-primary btn-sm ml-auto" onclick="expApproved()">Export JE CSV</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Vendor</th><th>GL Code</th><th>GL Name</th><th>Department</th><th>Cost Center</th>
+                <th class="td-r">Current Month</th><th class="td-r">Prior Month</th><th class="td-r">6-Mo Avg</th>
+                <th class="td-r">Forecast</th><th class="td-r">Accrual Amount</th>
+                <th>Basis</th><th>Risk</th><th>Fcst Match</th><th>Action</th>
+              </tr></thead>
+              <tbody id="appr-tbody"></tbody>
+            </table>
+          </div>
+          <div style="margin-top:12px;font-size:11px;color:var(--text3)" id="appr-footer"></div>
+        </div>
+      </div>
+
+      <!-- SOURCE OF TRUTH -->
+      <div class="page" id="page-sot">
+        <div id="sot-empty" class="empty" style="display:none"><h3>Upload AP Details first</h3></div>
+        <div id="sot-content">
+          <div class="alert al-info mb12">Complete 12-month AP actuals — your single source of truth. Filter by any dimension.</div>
+          <div class="filter-bar">
+            <input type="text" id="sot-search" placeholder="Search vendor / memo / GL…" oninput="renderSOT()" style="min-width:160px">
+            <select id="sot-period" onchange="renderSOT()"><option value="">All Periods</option></select>
+            <select id="sot-sub" onchange="renderSOT()"><option value="">All Subsidiaries</option></select>
+            <select id="sot-dept" onchange="renderSOT()"><option value="">All Departments</option></select>
+            <select id="sot-vendor" onchange="renderSOT()"><option value="">All Vendors</option></select>
+            <select id="sot-gl" onchange="renderSOT()"><option value="">All GL Codes</option></select>
+            <select id="sot-cc" onchange="renderSOT()"><option value="">All Cost Centers</option></select>
+            <select id="sot-type" onchange="renderSOT()"><option value="">All Types</option></select>
+            <button class="btn btn-sm" onclick="clearF('sot')">Clear</button>
+            <button class="btn btn-primary btn-sm ml-auto" onclick="expSOT()">Export Full Dataset</button>
+          </div>
+          <div class="stats s4 mb12">
+            <div class="stat sv-accent"><div class="stat-label">Total Spend</div><div class="stat-value" id="sot-tot">—</div></div>
+            <div class="stat"><div class="stat-label">Transactions</div><div class="stat-value" id="sot-txns">—</div></div>
+            <div class="stat"><div class="stat-label">Vendors</div><div class="stat-value" id="sot-vends">—</div></div>
+            <div class="stat"><div class="stat-label">GL Codes</div><div class="stat-value" id="sot-gls">—</div></div>
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr><th>Period</th><th>Subsidiary</th><th>Posting Date</th><th>Vendor</th><th>GL Code</th><th>Dept</th><th>Cost Center</th><th>Entity</th><th>BU</th><th>Class</th><th>Type</th><th>Invoice Type</th><th>Memo</th><th>Coupa PO</th><th>Budget ID</th><th class="td-r">Amount USD</th></tr></thead>
+            <tbody id="sot-tbody"></tbody></table>
+          </div>
+          <div style="margin-top:6px;text-align:right;font-size:11px;color:var(--text3)" id="sot-lbl"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────
+let AP=[], FC=[], FC_PERIODS=[], LOG=[], ACC_DEC={}, COMMENTARY={};
+let DB=null;
+const DB_NAME='fpna_close_db', DB_VER=1, STORE='kv';
+
+// ── INDEXEDDB PERSISTENCE (handles 15MB+ data) ────────
+function openDB(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open(DB_NAME,DB_VER);
+    req.onupgradeneeded=e=>{e.target.result.createObjectStore(STORE);};
+    req.onsuccess=e=>{res(e.target.result);};
+    req.onerror=e=>{rej(e);};
+  });
+}
+function dbSet(key,val){
+  return new Promise((res,rej)=>{
+    const tx=DB.transaction(STORE,'readwrite');
+    const req=tx.objectStore(STORE).put(val,key);
+    req.onsuccess=()=>res();req.onerror=e=>rej(e);
+  });
+}
+function dbGet(key){
+  return new Promise((res,rej)=>{
+    const tx=DB.transaction(STORE,'readonly');
+    const req=tx.objectStore(STORE).get(key);
+    req.onsuccess=e=>res(e.target.result);req.onerror=e=>rej(e);
+  });
+}
+function dbDel(key){
+  return new Promise((res,rej)=>{
+    const tx=DB.transaction(STORE,'readwrite');
+    const req=tx.objectStore(STORE).delete(key);
+    req.onsuccess=()=>res();req.onerror=e=>rej(e);
+  });
+}
+
+// ── STORAGE: localStorage primary (survives file renames), IndexedDB secondary ──
+const LS_KEY='fpna_v4';
+
+function lsSave(key,data){
+  try{
+    const str=JSON.stringify(data);
+    // Split into 1MB chunks to handle localStorage limits
+    const chunkSize=900000;
+    const chunks=Math.ceil(str.length/chunkSize);
+    localStorage.setItem(key+'_chunks',chunks);
+    for(let i=0;i<chunks;i++){
+      localStorage.setItem(key+'_'+i,str.slice(i*chunkSize,(i+1)*chunkSize));
+    }
+    return true;
+  }catch(e){console.warn('lsSave failed for '+key,e);return false;}
+}
+
+function lsLoad(key){
+  try{
+    const chunks=parseInt(localStorage.getItem(key+'_chunks')||'0');
+    if(!chunks)return null;
+    let str='';
+    for(let i=0;i<chunks;i++)str+=localStorage.getItem(key+'_'+i)||'';
+    return str?JSON.parse(str):null;
+  }catch(e){return null;}
+}
+
+async function save(){
+  // Primary: localStorage (survives file version changes)
+  lsSave(LS_KEY+'_ap',AP);
+  lsSave(LS_KEY+'_fc',FC);
+  lsSave(LS_KEY+'_fcp',FC_PERIODS);
+  lsSave(LS_KEY+'_log',LOG);
+  lsSave(LS_KEY+'_dec',ACC_DEC);
+  lsSave(LS_KEY+'_com',COMMENTARY);
+  // Secondary: IndexedDB
+  try{
+    if(!DB)DB=await openDB();
+    await dbSet('AP',AP);await dbSet('FC',FC);await dbSet('FC_PERIODS',FC_PERIODS);
+    await dbSet('LOG',LOG);await dbSet('ACC_DEC',ACC_DEC);await dbSet('COMMENTARY',COMMENTARY);
+  }catch(e){console.warn('IndexedDB save failed, localStorage is primary:',e);}
+}
+
+async function load(){
+  // Try localStorage first (works across file renames)
+  const apLS=lsLoad(LS_KEY+'_ap');
+  if(apLS&&apLS.length>0){
+    AP=apLS;
+    FC=lsLoad(LS_KEY+'_fc')||[];
+    FC_PERIODS=lsLoad(LS_KEY+'_fcp')||[];
+    LOG=lsLoad(LS_KEY+'_log')||[];
+    ACC_DEC=lsLoad(LS_KEY+'_dec')||{};
+    COMMENTARY=lsLoad(LS_KEY+'_com')||{};
+    console.log(`Loaded from localStorage: ${AP.length} AP records`);
+  } else {
+    // Fall back to IndexedDB
+    try{
+      DB=await openDB();
+      const ap=await dbGet('AP');if(ap)AP=ap;
+      const fc=await dbGet('FC');if(fc)FC=fc;
+      const fcp=await dbGet('FC_PERIODS');if(fcp)FC_PERIODS=fcp;
+      const log=await dbGet('LOG');if(log)LOG=log;
+      const dec=await dbGet('ACC_DEC');if(dec)ACC_DEC=dec;
+      const com=await dbGet('COMMENTARY');if(com)COMMENTARY=com;
+      if(AP.length>0){
+        console.log(`Loaded from IndexedDB: ${AP.length} AP records`);
+        // Migrate to localStorage
+        save();
+      }
+    }catch(e){console.warn('IndexedDB load failed:',e);}
+  }
+  buildVendorMatchTable();
+  refreshAll();
+}
+
+async function clearAll(){
+  if(!confirm('Clear all data? This cannot be undone.'))return;
+  AP=[];FC=[];FC_PERIODS=[];LOG=[];ACC_DEC={};COMMENTARY={};
+  await save();
+  refreshAll();
+  document.getElementById('ap-fb').style.display='none';
+  document.getElementById('fc-fb').style.display='none';
+}
+
+// ── UTILS ─────────────────────────────────────────────
+const fmt=n=>{if(n===null||n===undefined||isNaN(n))return'—';const a=Math.abs(n),s=a>=1e6?'$'+(n/1e6).toFixed(1)+'M':a>=1e3?'$'+(n/1e3).toFixed(1)+'K':'$'+Math.round(n).toLocaleString();return n<0?'('+s.replace('-','').replace('$','')+')':s;};
+const fmtF=n=>{if(isNaN(n))return'—';return(n<0?'(':'')+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+(n<0?')':'');};
+const fmtP=n=>{if(isNaN(n)||!isFinite(n))return'—';return(n>0?'+':'')+n.toFixed(1)+'%';};
+const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const parseAmt=s=>{const n=parseFloat(String(s||'').replace(/[$,() ]/g,''));return isNaN(n)?0:(String(s).includes('(')&&!String(s).startsWith('-')?-n:n);};
+function toYM(s){
+  if(!s)return null;
+  const mo={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+  const m1=String(s).match(/^([a-zA-Z]{3})[\s\-](\d{4})$/i);if(m1)return m1[2]+'-'+(mo[m1[1].toLowerCase()]||'01');
+  const d=new Date(s);if(!isNaN(d.getTime()))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  const m2=String(s).match(/(\d{4})[-\/](\d{1,2})/);if(m2)return m2[1]+'-'+String(m2[2]).padStart(2,'0');
+  return null;
+}
+const toML=p=>{if(!p)return'';const[y,m]=p.split('-');const n=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return(n[parseInt(m)-1]||'')+' '+"'"+y.slice(2);};
+function parseCSV(txt){
+  const lines=txt.trim().split(/\r?\n/);
+  const hdr=parseCSVLine(lines[0]);
+  return{hdr,rows:lines.slice(1).filter(l=>l.trim()).map(l=>{const v=parseCSVLine(l);const o={};hdr.forEach((h,i)=>o[h]=v[i]||'');return o;})};
+}
+function parseCSVLine(l){const r=[];let c='',q=false;for(let i=0;i<l.length;i++){const ch=l[i];if(ch==='"')q=!q;else if(ch===','&&!q){r.push(c.trim());c='';}else c+=ch;}r.push(c.trim());return r;}
+const findC=(h,...t)=>{const lh=h.map(x=>x.toLowerCase().trim());for(const tt of t){const i=lh.findIndex(x=>x.includes(tt.toLowerCase()));if(i>=0)return h[i];}return null;};
+// ── MULTI-SELECT ENGINE ───────────────────────────────
+const MS_STATE={}; // {wrapperId: Set of selected values}
+
+function initMS(id, opts, onchange){
+  const wrap=document.getElementById(id);if(!wrap)return;
+  if(!MS_STATE[id])MS_STATE[id]=new Set();
+  const allOpts=[...new Set(opts)].filter(Boolean).sort();
+  const list=wrap.querySelector('.ms-list');
+  // Only rebuild HTML if options have actually changed — prevents scroll-to-top on checkbox click
+  const existingOpts=[...list.querySelectorAll('input[type=checkbox]')].map(cb=>cb.value);
+  const optsChanged=allOpts.length!==existingOpts.length||allOpts.some((o,i)=>o!==existingOpts[i]);
+  if(optsChanged){
+    list.innerHTML=allOpts.map(o=>`<label class="ms-item"><input type="checkbox" value="${esc(o)}"${MS_STATE[id].has(o)?' checked':''}><span>${esc(o)}</span></label>`).join('');
+    list.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+      cb.onchange=()=>{
+        if(cb.checked)MS_STATE[id].add(cb.value);else MS_STATE[id].delete(cb.value);
+        updateMSBtn(id);onchange();
+      };
+    });
+  }
+  updateMSBtn(id);
+}
+
+function updateMSBtn(id){
+  const wrap=document.getElementById(id);if(!wrap)return;
+  const cnt=MS_STATE[id]?MS_STATE[id].size:0;
+  const cntEl=wrap.querySelector('.ms-cnt');
+  if(cntEl)cntEl.textContent=cnt>0?`(${cnt}) `:'';
+  const btn=wrap.querySelector('.ms-btn');
+  if(btn)btn.classList.toggle('active',cnt>0);
+}
+
+function getMS(id){return MS_STATE[id]&&MS_STATE[id].size>0?[...MS_STATE[id]]:null;}
+
+function toggleMS(id){
+  document.querySelectorAll('.ms-dropdown.open').forEach(d=>{if(d.closest('.ms-wrap')?.id!==id)d.classList.remove('open');});
+  const drop=document.querySelector(`#${id} .ms-dropdown`);if(drop)drop.classList.toggle('open');
+}
+
+function filterMSList(input){
+  const q=input.value.toLowerCase();
+  input.closest('.ms-dropdown').querySelectorAll('.ms-item').forEach(item=>{item.style.display=item.textContent.toLowerCase().includes(q)?'':'none';});
+}
+
+function selectAllMS(id){
+  const wrap=document.getElementById(id);if(!wrap)return;
+  if(!MS_STATE[id])MS_STATE[id]=new Set();
+  wrap.querySelectorAll('.ms-item').forEach(item=>{
+    if(item.style.display==='none')return;
+    const cb=item.querySelector('input[type=checkbox]');
+    if(cb){cb.checked=true;MS_STATE[id].add(cb.value);}
+  });
+  updateMSBtn(id);
+  // Trigger the onchange callback stored on the first visible checkbox
+  const firstCb=wrap.querySelector('.ms-item:not([style*="none"]) input[type=checkbox]');
+  if(firstCb&&firstCb.onchange)firstCb.onchange();
+}
+
+function clearMS(id){
+  const wrap=document.getElementById(id);if(!wrap)return;
+  wrap.querySelectorAll('.ms-item').forEach(item=>{
+    if(item.style.display==='none')return;
+    const cb=item.querySelector('input[type=checkbox]');
+    if(cb){cb.checked=false;if(MS_STATE[id])MS_STATE[id].delete(cb.value);}
+  });
+  updateMSBtn(id);
+  const firstCb=wrap.querySelector('.ms-item:not([style*="none"]) input[type=checkbox]');
+  if(firstCb&&firstCb.onchange)firstCb.onchange();
+}
+
+function clearAllMS(prefix){
+  Object.keys(MS_STATE).filter(k=>k.startsWith('ms-'+prefix)).forEach(k=>{clearMS(k);});
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.ms-wrap'))document.querySelectorAll('.ms-dropdown.open').forEach(d=>d.classList.remove('open'));
+});
+
+function msFilter(arr, id, field){
+  const sel=getMS(id);if(!sel)return arr;
+  return arr.filter(r=>sel.includes(r[field]||''));
+}
+
+function selVal(id){return document.getElementById(id)?.value||'';}
+function showFB(id,msg,type){const el=document.getElementById(id);if(!el)return;el.style.display='block';el.className='alert al-'+(type==='ok'?'ok':type==='warn'?'warn':'info');el.textContent=msg;}
+function grpSum(arr,key){const m={};arr.forEach(r=>{const k=r[key]||'(blank)';if(!m[k])m[k]=0;m[k]+=r.amount||0;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
+function renderBars(id,data,n=12){
+  const el=document.getElementById(id);if(!el)return;
+  const top=data.slice(0,n);const maxV=top.length?Math.abs(top[0][1]):1;
+  const C=['#E8612A','#1A4FA0','#2A7A4B','#A66B00','#6B3FA0','#C0311F','#0F6E84','#7A4A2A'];
+  el.innerHTML=top.map(([k,v],i)=>`<div class="bar-row"><div class="bar-lbl" title="${esc(k)}">${esc(k)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,Math.round(Math.abs(v)/maxV*100))}%;background:${C[i%C.length]}33;border:1px solid ${C[i%C.length]}66"></div></div><div class="bar-val">${fmt(v)}</div></div>`).join('');
+}
+
+// ── AP UPLOAD ─────────────────────────────────────────
+function handleAP(event){
+  const file=event.target.files[0];if(!file)return;
+  showFB('ap-fb','📂 Reading file… this may take 20-30 seconds for large files. Do not close the tab.','info');
+  const r=new FileReader();
+  r.onload=async e=>{
+    try{
+      const text=e.target.result;
+      // Stream line by line to avoid memory issues with 264k row files
+      const lines=text.split(/\r?\n/);
+      if(lines.length<2){showFB('ap-fb','File appears empty.','warn');return;}
+
+      // Parse header — trim each field
+      const hdr=parseCSVLine(lines[0]).map(h=>h.trim());
+      const hdrL=hdr.map(h=>h.toLowerCase());
+
+      // Find column indices directly (no object rebuilding)
+      const idx=((...terms)=>{for(const t of terms){const i=hdrL.findIndex(h=>h.includes(t.toLowerCase()));if(i>=0)return i;}return -1;});
+      const iSub=idx('subsidiary','company');
+      const iPer=idx('period');
+      const iPost=idx('posting period date sql','posting period date','netsuite date');
+      const iVend=idx('vendor');
+      const iAcct=idx('account');
+      const iAmt=idx('amount (net)','amount(net)','net amount');
+      const iDept=idx('department','dept');
+      const iCls=idx('class');
+      const iMemo=idx('memo/description','memo','description');
+      const iType=idx('type');
+      const iCoupa=idx('coupa po id','coupa','po id');
+      const iBudget=idx('budget_id','budget id');
+      const iEntity=idx('entity');
+      const iCC=idx('cost center');
+      const iProj=idx('project');
+      const iInvType=idx('invoice type');
+      const iCurr=idx('currency');
+
+      if(iVend<0){showFB('ap-fb','Cannot find Vendor column. Headers: '+hdr.slice(0,10).join(' | '),'warn');return;}
+      if(iAmt<0){showFB('ap-fb','Cannot find Amount (Net) column. Headers: '+hdr.join(' | '),'warn');return;}
+
+      const parsed=[];
+      const g=(vals,i)=>i>=0?(vals[i]||'').trim():'';
+
+      for(let li=1;li<lines.length;li++){
+        const line=lines[li];
+        if(!line.trim())continue;
+        const vals=parseCSVLine(line);
+        const vendor=g(vals,iVend);
+        if(!vendor||vendor.toLowerCase()==='vendor')continue; // skip journal placeholders
+        const period=toYM(g(vals,iPer));
+        if(!period)continue;
+        const amtRaw=g(vals,iAmt);
+        const amount=parseAmt(amtRaw);
+        if(amount===0)continue;
+        parsed.push({
+          sub:g(vals,iSub),period,posting:g(vals,iPost),
+          vendor,account:g(vals,iAcct),amount,
+          dept:g(vals,iDept),cls:g(vals,iCls),memo:g(vals,iMemo),
+          type:g(vals,iType),coupa:g(vals,iCoupa),budget:g(vals,iBudget),
+          entity:g(vals,iEntity),cc:g(vals,iCC),proj:g(vals,iProj),
+          inv_type:g(vals,iInvType),currency:g(vals,iCurr)
+        });
+      }
+
+      if(!parsed.length){
+        showFB('ap-fb','No valid vendor invoice rows found. Columns detected: '+hdr.join(' | '),'warn');
+        return;
+      }
+      const newP=[...new Set(parsed.map(r=>r.period))].sort();
+      AP=AP.filter(r=>!newP.includes(r.period)).concat(parsed);
+      LOG.unshift({type:'AP Details',file:file.name,date:new Date().toLocaleDateString(),records:parsed.length,periods:newP.join(', ')});
+      showFB('ap-fb',`Saving ${parsed.length.toLocaleString()} records…`,'info');
+      await save();
+      buildVendorMatchTable();
+      refreshAll();
+      showFB('ap-fb',`✓ Loaded ${parsed.length.toLocaleString()} records across ${newP.length} period(s): ${newP.join(', ')} — amounts shown as net (positives = expense, negatives = reversals/credits)`,'ok');
+    }catch(err){
+      showFB('ap-fb','Parse error: '+err.message+'. Check browser console for details.','warn');
+      console.error('AP upload error:', err);
+    }
+  };
+  r.onerror=()=>showFB('ap-fb','Could not read file. Make sure it is a valid CSV.','warn');
+  r.readAsText(file,'latin1');
+  event.target.value='';
+}
+
+// ── FORECAST UPLOAD ───────────────────────────────────
+function handleFcst(event){
+  const file=event.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=async e=>{
+    try{
+      const{hdr,rows}=parseCSV(e.target.result);
+      const moRe=/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[\s\-]?\d{4}$/i;
+      const moCols=hdr.filter(h=>moRe.test(h.trim()));
+      if(!moCols.length){showFB('fc-fb','No monthly columns found (e.g. Jan-2026).','warn');return;}
+      const c={gl_code:findC(hdr,'gl account code','gl code','account code'),gl_name:findC(hdr,'gl account name','gl name','account name'),bu:findC(hdr,'bu code','bu ','bunit'),cc:findC(hdr,'cost center name','cost center name'),cc_code:findC(hdr,'cost center code','cc code'),dept:findC(hdr,'cost center owner name','owner name','department','dept'),vc:findC(hdr,'vendor - fp&a code','vendor fp&a code','vendor code'),vn:findC(hdr,'vendor - fp&a name','vendor fp&a name','vendor name'),budget:findC(hdr,'budget id code','budget id'),comments:findC(hdr,'comments','comment')};
+      const parsed=[];
+      rows.forEach(row=>{
+        moCols.forEach(mc=>{
+          const amt=parseAmt(row[mc]);
+          parsed.push({gl_code:(row[c.gl_code]||'').trim(),gl_name:(row[c.gl_name]||'').trim(),bu:(row[c.bu]||'').trim(),cc:(row[c.cc]||'').trim(),cc_code:(row[c.cc_code]||'').trim(),dept:(row[c.dept]||'').trim(),vendor_code:(row[c.vc]||'').trim(),vendor_name:(row[c.vn]||'').trim(),budget:(row[c.budget]||'').trim(),comments:(row[c.comments]||'').trim(),period:toYM(mc),amount:amt});
+        });
+      });
+      FC=parsed.filter(r=>r.period);
+      FC_PERIODS=[...new Set(FC.map(r=>r.period))].filter(Boolean).sort();
+      LOG.unshift({type:'Forecast (M8)',file:file.name,date:new Date().toLocaleDateString(),records:parsed.length,periods:FC_PERIODS.slice(0,3).join(', ')+'…'});
+      await save();
+      buildVendorMatchTable();
+      refreshAll();
+      showFB('fc-fb',`✓ Loaded ${parsed.length.toLocaleString()} forecast rows across ${FC_PERIODS.length} months.`,'ok');
+    }catch(err){showFB('fc-fb','Error: '+err.message,'warn');}
+  };
+  r.readAsText(file);event.target.value='';
+}
+
+// ── REFRESH ALL ───────────────────────────────────────
+function refreshAll(){
+  updateUploadPage();
+  renderActuals();
+  renderFcstVsAct();
+  renderFuture();
+  renderAccruals();
+  renderAttention();
+  renderSOT();
+  renderApproved();
+}
+
+function updateUploadPage(){
+  const hA=AP.length>0,hF=FC.length>0;
+  document.getElementById('ap-stat-card').style.display=hA?'block':'none';
+  document.getElementById('fc-stat-card').style.display=hF?'block':'none';
+  if(hA){document.getElementById('ap-s-rec').textContent=AP.length.toLocaleString();document.getElementById('ap-s-per').textContent=[...new Set(AP.map(r=>r.period))].filter(Boolean).length;document.getElementById('ap-s-ven').textContent=[...new Set(AP.map(r=>r.vendor))].length;}
+  if(hF){document.getElementById('fc-s-row').textContent=FC.length.toLocaleString();document.getElementById('fc-s-gl').textContent=[...new Set(FC.map(r=>r.gl_code))].filter(Boolean).length;document.getElementById('fc-s-mon').textContent=FC_PERIODS.length;}
+  const hist=document.getElementById('upload-hist');
+  if(!LOG.length){hist.innerHTML='<div class="empty" style="padding:14px"><p>No uploads yet.</p></div>';return;}
+  hist.innerHTML=LOG.map(u=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="font-size:18px">${u.type==='AP Details'?'📄':'📋'}</span><div style="flex:1"><div style="font-weight:600">${esc(u.file)}</div><div style="color:var(--text3)">${esc(u.type)} · ${u.records.toLocaleString()} records · ${esc(u.periods)}</div></div><span style="color:var(--text3)">${u.date}</span></div>`).join('');
+}
+
+function popSel(id,opts,cur){const el=document.getElementById(id);if(!el)return;const prev=cur!==undefined?cur:el.value;const first=el.options[0]?el.options[0].text:'';el.innerHTML=`<option value="">${first}</option>`+[...new Set(opts)].filter(Boolean).sort().map(o=>`<option value="${esc(o)}"${o===prev?' selected':''}>${esc(o)}</option>`).join('');}
+
+// ── AP ACTUALS ────────────────────────────────────────
+let AV='summary';
+function switchAV(v){AV=v;document.getElementById('av-summary').style.display=v==='summary'?'block':'none';document.getElementById('av-detail').style.display=v==='detail'?'block':'none';document.querySelectorAll('#page-actuals .inner-tab').forEach((t,i)=>t.classList.toggle('active',['summary','detail'][i]===v));renderActuals();}
+
+function getAPF(){
+  let d=[...AP];
+  d=msFilter(d,'ms-af-period','period');
+  d=msFilter(d,'ms-af-sub','sub');
+  d=msFilter(d,'ms-af-dept','dept');
+  d=msFilter(d,'ms-af-vendor','vendor');
+  d=msFilter(d,'ms-af-gl','account');
+  d=msFilter(d,'ms-af-class','cls');
+  d=msFilter(d,'ms-af-cc','cc');
+  d=msFilter(d,'ms-af-type','type');
+  return d;
+}
+
+function renderActuals(){
+  const has=AP.length>0;
+  document.getElementById('act-empty').style.display=has?'none':'block';
+  document.getElementById('act-content').style.display=has?'block':'none';
+  if(!has)return;
+  const periods=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
+  initMS('ms-af-period',periods,renderActuals);
+  initMS('ms-af-sub',[...new Set(AP.map(r=>r.sub))],renderActuals);
+  initMS('ms-af-dept',[...new Set(AP.map(r=>r.dept))],renderActuals);
+  initMS('ms-af-vendor',[...new Set(AP.map(r=>r.vendor))],renderActuals);
+  initMS('ms-af-gl',[...new Set(AP.map(r=>r.account))],renderActuals);
+  initMS('ms-af-class',[...new Set(AP.map(r=>r.cls))],renderActuals);
+  initMS('ms-af-cc',[...new Set(AP.map(r=>r.cc))],renderActuals);
+  initMS('ms-af-type',[...new Set(AP.map(r=>r.type))],renderActuals);
+  const d=getAPF();const tot=d.reduce((s,r)=>s+r.amount,0);
+  document.getElementById('a-total').textContent=fmt(tot);
+  document.getElementById('a-txns').textContent=d.length.toLocaleString();
+  document.getElementById('a-vends').textContent=new Set(d.map(r=>r.vendor)).size;
+  document.getElementById('a-pers').textContent=new Set(d.map(r=>r.period)).size;
+  const mt={};periods.forEach(p=>mt[p]=0);d.forEach(r=>{if(mt[r.period]!==undefined)mt[r.period]+=r.amount;});
+  const maxM=Math.max(...Object.values(mt),1);
+  document.getElementById('a-spark').innerHTML=periods.map((p,i)=>{const v=mt[p]||0;const h=Math.max(3,Math.round(v/maxM*60));return`<div class="spark-col"><div class="spark-bar" style="height:${h}px;background:var(--accent);opacity:${0.35+0.65*(v/maxM)}" title="${p}: ${fmtF(v)}"></div><div class="spark-lbl">${p.slice(5)}</div></div>`;}).join('');
+  if(AV==='summary'){renderBars('bars-vendor',grpSum(d,'vendor'));renderBars('bars-gl',grpSum(d,'account'));renderBars('bars-dept',grpSum(d,'dept'));}
+  else{document.getElementById('a-tbody').innerHTML=d.slice(0,500).map(r=>`<tr><td>${esc(r.period)}</td><td class="td-m">${esc(r.sub)}</td><td style="font-weight:600">${esc(r.vendor)}</td><td><span class="tag tag-gl">${esc(r.account)}</span></td><td class="td-m">${esc(r.dept)}</td><td class="td-m">${esc(r.cc)}</td><td class="td-m">${esc(r.entity)}</td><td class="td-m">${esc(r.cls)}</td><td class="td-m">${esc(r.type)}</td><td class="td-m" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.memo)}">${esc(r.memo)}</td><td class="td-r">${fmtF(r.amount)}</td></tr>`).join('');}
+}
+function clearF(prefix){clearAllMS(prefix);renderActuals();renderSOT();}
+
+
+// ── FUZZY VENDOR MATCHING ENGINE ─────────────────────
+// Trigram similarity — same algorithm as PostgreSQL similarity()
+// Breaks strings into 3-char tokens and measures overlap
+function normalize(s){
+  return String(s||'').toUpperCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()'"]/g,'')
+    .replace(/\b(LLC|INC|CORP|LTD|CO|COMPANY|GROUP|THE|AND|&|PRIVATE|PVT|LIMITED)\b/g,'')
+    .replace(/\s+/g,' ').trim();
+}
+function trigrams(s){
+  const n=normalize(s);const t=new Set();
+  for(let i=0;i<n.length-2;i++)t.add(n.slice(i,i+3));
+  return t;
+}
+function trigramSim(a,b){
+  const ta=trigrams(a),tb=trigrams(b);
+  if(!ta.size||!tb.size)return 0;
+  let inter=0;ta.forEach(t=>{if(tb.has(t))inter++;});
+  return inter/(ta.size+tb.size-inter);
+}
+
+// Build vendor match table: AP vendor -> best FC vendor_name match
+// Returns {vendor_name, gl_code, score} or null
+let VENDOR_MATCH_CACHE={}; // key: apVendor+'||'+glCode+'||'+dept -> {fcst_vendor, score, fcst_amount per period}
+
+function buildVendorMatchTable(){
+  VENDOR_MATCH_CACHE={};
+  if(!FC.length||!AP.length)return;
+  const fcCombos={};
+  FC.forEach(r=>{
+    if(!r.vendor_name||!r.gl_code)return;
+    const deptKey=(r.cc_code||r.cc||'').trim();
+    const k=r.vendor_name+'||'+r.gl_code+'||'+deptKey;
+    if(!fcCombos[k])fcCombos[k]={vendor_name:r.vendor_name,gl_code:r.gl_code,gl_name:r.gl_name||'',cc:r.cc,cc_code:r.cc_code,dept_key:deptKey,periods:{}};
+    fcCombos[k].periods[r.period]=(fcCombos[k].periods[r.period]||0)+r.amount;
+  });
+  const fcList=Object.values(fcCombos);
+  const apCombos=new Set();
+  AP.forEach(r=>{if(r.vendor&&r.account)apCombos.add(r.vendor+'||'+r.account+'||'+r.dept+'||'+r.cc);});
+
+  function scoreMatch(apVendor,apDept,apCC,glCode,f){
+    const normAP=normalize(apVendor),normFC=normalize(f.vendor_name);
+    let nameSim=trigramSim(apVendor,f.vendor_name);
+    if(normAP.length>=3&&normFC.length>=3){
+      if(normFC.includes(normAP)||normAP.includes(normFC)){
+        const ratio=Math.min(normAP.length,normFC.length)/Math.max(normAP.length,normFC.length);
+        nameSim=Math.max(nameSim,0.75+ratio*0.20);
+      }
+      const apFirst=normAP.split(' ')[0],fcFirst=normFC.split(' ')[0];
+      if(apFirst.length>=4&&apFirst===fcFirst)nameSim=Math.max(nameSim,0.80);
+    }
+    if(nameSim<0.65)return null;
+    const apDeptNum=(apDept.match(/^\d+/)||[''])[0];
+    const fcCCNum=(f.cc_code.match(/^\d+/)||[''])[0];
+    const fcCCNameNum=(f.cc.match(/^\d+/)||[''])[0];
+    let deptScore=0;
+    if(apDeptNum&&fcCCNum&&apDeptNum===fcCCNum)deptScore=1.0;
+    else if(apDeptNum&&fcCCNameNum&&apDeptNum===fcCCNameNum)deptScore=0.9;
+    else if(apCC&&f.cc_code&&apCC.includes(f.cc_code))deptScore=0.8;
+    // STRICT: if both sides have a numeric code and they differ, reject entirely
+    // This prevents AP dept 301 from matching FC dept 341 just because name is good
+    else if(apDeptNum&&(fcCCNum||fcCCNameNum)){
+      const fcNum=fcCCNum||fcCCNameNum;
+      if(apDeptNum!==fcNum)return null; // numeric codes present but different — hard reject
+      deptScore=0.9;
+    }
+    else deptScore=trigramSim(apDept,f.cc)*0.7+trigramSim(apDept,f.cc_code)*0.3;
+    const combined=nameSim*0.7+deptScore*0.3;
+    return{nameSim,deptScore,combined};
+  }
+
+  apCombos.forEach(combo=>{
+    const parts=combo.split('||');
+    const apVendor=parts[0],glCode=parts[1],apDept=parts[2],apCC=parts[3];
+    if(!apVendor)return;
+    const cacheKey=apVendor+'||'+glCode+'||'+apDept;
+
+    // PASS 1: Same GL code
+    let best=null,bestScore=0,bestDeptScore=0;
+    fcList.filter(f=>f.gl_code===glCode).forEach(f=>{
+      const s=scoreMatch(apVendor,apDept,apCC,glCode,f);if(!s)return;
+      if(s.combined>bestScore){bestScore=s.combined;bestDeptScore=s.deptScore;best=f;}
+    });
+    const nameOnly=best?trigramSim(apVendor,best.vendor_name):0;
+    if(best&&(nameOnly>=0.85||bestScore>=0.75)){
+      const deptMismatch=bestDeptScore<0.5;
+      // If dept mismatch AND vendor appears under multiple depts in FC for this GL,
+      // do not pull any forecast dollar amount — wrong dept forecast is worse than no forecast
+      const fcEntriesForVendor=fcList.filter(f=>f.gl_code===glCode&&trigramSim(apVendor,f.vendor_name)>=0.80);
+      const hasMultipleDepts=fcEntriesForVendor.length>1;
+      if(deptMismatch&&hasMultipleDepts){
+        // Flag as dept mismatch but supply empty periods so no dollar amount is shown
+        VENDOR_MATCH_CACHE[cacheKey]={fcst_vendor:best.vendor_name,gl_code:best.gl_code,gl_name:best.gl_name,fcst_dept:'Multiple depts in forecast — no match',fcst_cc_code:'',dept_match_score:bestDeptScore,score:bestScore,periods:{},gl_mismatch:false,dept_mismatch:true,no_dept_match:true};
+        return;
+      }
+      VENDOR_MATCH_CACHE[cacheKey]={fcst_vendor:best.vendor_name,gl_code:best.gl_code,gl_name:best.gl_name,fcst_dept:best.cc||best.cc_code||'',fcst_cc_code:best.cc_code,dept_match_score:bestDeptScore,score:bestScore,periods:best.periods,gl_mismatch:false,dept_mismatch:deptMismatch};
+      return;
+    }
+
+    // PASS 2: Cross-GL fallback — name match only, different GL
+    // We flag the coding mismatch but do NOT supply forecast dollars
+    // Forecast amounts should only appear on the AP row whose GL matches the forecast GL
+    let bestCross=null,bestCrossScore=0;
+    fcList.filter(f=>f.gl_code!==glCode).forEach(f=>{
+      const s=scoreMatch(apVendor,apDept,apCC,glCode,f);if(!s)return;
+      if(s.nameSim>bestCrossScore){bestCrossScore=s.nameSim;bestCross=f;}
+    });
+    if(bestCross&&bestCrossScore>=0.85){
+      // Flag mismatch but supply empty periods — no dollar amount for wrong GL row
+      VENDOR_MATCH_CACHE[cacheKey]={fcst_vendor:bestCross.vendor_name,gl_code:bestCross.gl_code,gl_name:bestCross.gl_name,fcst_dept:bestCross.cc||bestCross.cc_code||'',fcst_cc_code:bestCross.cc_code,dept_match_score:0,score:bestCrossScore,periods:{},gl_mismatch:true,ap_gl:glCode,fcst_gl:bestCross.gl_code,fcst_gl_name:bestCross.gl_name};
+    }
+  });
+  console.log(`Vendor match table: ${Object.keys(VENDOR_MATCH_CACHE).length} matches`);
+}
+
+function getFcstForVendor(apVendor,glCode,dept,period){
+  const key=apVendor+'||'+glCode+'||'+dept;
+  const match=VENDOR_MATCH_CACHE[key];
+  if(!match)return{amount:null,vendor:null,score:0,fcst_dept:null,gl_mismatch:false,dept_mismatch:false,no_dept_match:false};
+  const base={vendor:match.fcst_vendor,score:match.score,fcst_dept:match.fcst_dept,dept_match_score:match.dept_match_score,gl_mismatch:match.gl_mismatch||false,dept_mismatch:match.dept_mismatch||false,no_dept_match:match.no_dept_match||false,ap_gl:match.ap_gl||null,fcst_gl:match.fcst_gl||null,fcst_gl_name:match.fcst_gl_name||null};
+  if(match.no_dept_match)return{...base,amount:null}; // vendor found but dept ambiguous — no amount
+  const amt=match.periods[period];
+  if(amt===undefined||amt===null)return{...base,amount:null};
+  return{...base,amount:amt};
+}
+
+function generateCommentary(row){
+  const glName=row.gl_name||row.gl_code||'This GL';const varPct=row.pct;const varDol=row.variance;
+  if(Math.abs(varPct||0)<5)return`${glName} is tracking in line with forecast for the period.`;
+  if(varDol>0){const p=Math.abs(varPct).toFixed(0)+'%';if(Math.abs(varPct)>30)return`${glName} is significantly over forecast by ${fmt(varDol)} (${p}). Review for timing differences, unplanned spend, or invoice acceleration.`;return`${glName} is over forecast by ${fmt(varDol)} (${p}). Higher-than-expected spend. Confirm whether this reflects timing or a permanent change.`;}
+  else{const p=Math.abs(varPct).toFixed(0)+'%';if(Math.abs(varPct)>30)return`${glName} is significantly under forecast by ${fmt(Math.abs(varDol))} (${p}). Likely invoice timing delay. Monitor for accrual need.`;return`${glName} is under forecast by ${fmt(Math.abs(varDol))} (${p}). May reflect invoice timing. Confirm whether spend will be captured in a subsequent period.`;}
+}
+
+function renderFcstVsAct(){
+  const has=AP.length>0&&FC.length>0;
+  document.getElementById('fv-empty').style.display=has?'none':'block';
+  document.getElementById('fv-content').style.display=has?'block':'none';
+  if(!has)return;
+  const apP=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
+  const allP=[...new Set([...apP,...FC_PERIODS])].sort();
+  const selEl=document.getElementById('fv-period');
+  const curP=selEl.value||apP[apP.length-1];
+  selEl.innerHTML='<option value="">Select period</option>'+allP.map(p=>`<option value="${p}"${p===curP?' selected':''}>${p} — ${toML(p)}</option>`).join('');
+  if(!selEl.value&&curP)selEl.value=curP;
+  const period=selEl.value||curP;
+  let fcP=FC.filter(r=>r.period===period);
+  initMS('ms-fv-bu',[...new Set(fcP.map(r=>r.bu))].filter(Boolean),renderFcstVsAct);
+  initMS('ms-fv-cc',[...new Set(fcP.map(r=>r.cc))].filter(Boolean),renderFcstVsAct);
+  initMS('ms-fv-dept',[...new Set(fcP.map(r=>r.dept))].filter(Boolean),renderFcstVsAct);
+  initMS('ms-fv-gl',[...new Set(fcP.map(r=>r.gl_code))].filter(Boolean),renderFcstVsAct);
+  fcP=msFilter(fcP,'ms-fv-bu','bu');fcP=msFilter(fcP,'ms-fv-cc','cc');fcP=msFilter(fcP,'ms-fv-dept','dept');fcP=msFilter(fcP,'ms-fv-gl','gl_code');
+  let actP=AP.filter(r=>r.period===period);
+  actP=msFilter(actP,'ms-fv-dept','dept');actP=msFilter(actP,'ms-fv-gl','account');
+  const fcMap={};
+  fcP.forEach(f=>{const k=f.gl_code+'||'+f.dept+'||'+f.cc;if(!fcMap[k])fcMap[k]={...f,amount:0};fcMap[k].amount+=f.amount;});
+  const actMap={};actP.forEach(r=>{const k=r.account+'||'+r.dept+'||'+r.cc;if(!actMap[k])actMap[k]=0;actMap[k]+=r.amount;});
+  const totFcst=Object.values(fcMap).reduce((s,r)=>s+r.amount,0);
+  const totAct=Object.values(actMap).reduce((s,v)=>s+v,0);
+  const totVar=totAct-totFcst;const totPct=totFcst!==0?totVar/Math.abs(totFcst)*100:null;
+  document.getElementById('fv-fcst').textContent=fmt(totFcst);document.getElementById('fv-act').textContent=fmt(totAct);document.getElementById('fv-var').textContent=fmt(totVar);document.getElementById('fv-pct').textContent=fmtP(totPct);
+  if(!actP.length){document.getElementById('fv-alert').style.display='block';document.getElementById('fv-alert').textContent=`No actuals for ${period} yet.`;}else document.getElementById('fv-alert').style.display='none';
+  const allRows=Object.values(fcMap).map(f=>{const k=f.gl_code+'||'+f.dept+'||'+f.cc;const actual=actMap[k]||0;const variance=actual-f.amount;const pct=f.amount!==0?(variance/Math.abs(f.amount)*100):null;return{...f,actual,variance,pct};}).sort((a,b)=>Math.abs(b.variance)-Math.abs(a.variance));
+  const glGroups={};allRows.forEach(r=>{if(!glGroups[r.gl_name])glGroups[r.gl_name]=[];glGroups[r.gl_name].push(r);});
+  let html='';
+  Object.entries(glGroups).forEach(([glName,rows])=>{
+    const totF=rows.reduce((s,r)=>s+r.amount,0);const totA=rows.reduce((s,r)=>s+r.actual,0);const totV=totA-totF;const totPc=totF!==0?totV/Math.abs(totF)*100:null;
+    const comKey=`${period}||${glName}`;const savedCom=COMMENTARY[comKey];const autoCom=generateCommentary({gl_name:glName,variance:totV,pct:totPc});const comText=savedCom?.text||autoCom;const isEdited=!!savedCom?.edited;
+    html+=`<tr style="background:var(--surface2)"><td colspan="2" style="font-weight:700">${esc(glName)}</td><td class="td-m">${esc(rows[0].bu)}</td><td class="td-m">${esc(rows[0].cc)}</td><td class="td-m">${esc(rows[0].dept)}</td><td class="td-m">${esc(rows[0].vendor_name)}</td><td class="td-r" style="font-weight:600">${fmtF(totF)}</td><td class="td-r" style="font-weight:600">${fmtF(totA)}</td><td class="td-r ${totV>0?'var-pos':totV<0?'var-neg':''}" style="font-weight:600">${totV!==0?fmtF(totV):'—'}</td><td class="td-r">${totPc!==null?fmtP(totPc):'—'}</td><td>${totPc===null?'<span class="badge b-none">No fcst</span>':Math.abs(totPc)<5?'<span class="badge b-on">On Track</span>':totV>0?'<span class="badge b-over">Over</span>':'<span class="badge b-under">Under</span>'}</td><td class="commentary-cell"><textarea data-key="${esc(comKey)}" class="${isEdited?'user-edited':'auto-gen'}" onchange="markEdited(this)" rows="3">${esc(comText)}</textarea></td></tr>`;
+    rows.forEach(r=>{html+=`<tr style="opacity:.8"><td><span class="tag tag-gl" style="font-size:10px">${esc(r.gl_code)}</span></td><td class="td-m">${esc(r.gl_name)}</td><td class="td-m">${esc(r.bu)}</td><td class="td-m">${esc(r.cc)}</td><td class="td-m">${esc(r.dept)}</td><td class="td-m">${esc(r.vendor_name)}</td><td class="td-r">${fmtF(r.amount)}</td><td class="td-r">${fmtF(r.actual)}</td><td class="td-r ${r.variance>0?'var-pos':r.variance<0?'var-neg':''}">${r.variance!==0?fmtF(r.variance):'—'}</td><td class="td-r">${r.pct!==null?fmtP(r.pct):'—'}</td><td>${r.pct===null?'<span class="badge b-none">No fcst</span>':Math.abs(r.pct)<5?'<span class="badge b-on">On Track</span>':r.variance>0?'<span class="badge b-over">Over</span>':'<span class="badge b-under">Under</span>'}</td><td></td></tr>`;});
+  });
+  document.getElementById('fv-tbody').innerHTML=html;
+}
+function markEdited(el){el.className='user-edited';}
+async function saveCommentaries(){document.querySelectorAll('#fv-tbody textarea[data-key]').forEach(ta=>{const k=ta.getAttribute('data-key');COMMENTARY[k]={text:ta.value,edited:ta.classList.contains('user-edited')};});await save();alert('Commentaries saved.');}
+
+// ── FUTURE FORECAST ───────────────────────────────────
+function renderFuture(){
+  const has=FC.length>0;document.getElementById('fut-empty').style.display=has?'none':'block';document.getElementById('fut-content').style.display=has?'block':'none';if(!has)return;
+  const apP=new Set(AP.map(r=>r.period).filter(Boolean));const futP=FC_PERIODS.filter(p=>!apP.has(p)).sort();
+  let d=FC.filter(r=>futP.includes(r.period)&&r.amount!==0);
+  initMS('ms-fut-gl',[...new Set(d.map(r=>r.gl_code))].filter(Boolean),renderFuture);
+  initMS('ms-fut-bu',[...new Set(d.map(r=>r.bu))].filter(Boolean),renderFuture);
+  initMS('ms-fut-dept',[...new Set(d.map(r=>r.dept))].filter(Boolean),renderFuture);
+  d=msFilter(d,'ms-fut-gl','gl_code');d=msFilter(d,'ms-fut-bu','bu');d=msFilter(d,'ms-fut-dept','dept');
+  const keys={};d.forEach(r=>{const k=r.gl_code+'||'+r.dept+'||'+r.cc+'||'+r.vendor_name;if(!keys[k])keys[k]={gl_code:r.gl_code,gl_name:r.gl_name,dept:r.dept,cc:r.cc,vendor:r.vendor_name,bu:r.bu,amts:{}};keys[k].amts[r.period]=(keys[k].amts[r.period]||0)+r.amount;});
+  document.getElementById('fut-thead').innerHTML=`<th>GL Code</th><th>GL Name</th><th>BU</th><th>Dept</th><th>Vendor (FP&A)</th>`+futP.map(p=>`<th class="td-r">${toML(p)}</th>`).join('')+`<th class="td-r">Total</th>`;
+  document.getElementById('fut-tbody').innerHTML=Object.values(keys).map(row=>{const tot=Object.values(row.amts).reduce((s,v)=>s+v,0);return`<tr><td><span class="tag tag-gl">${esc(row.gl_code)}</span></td><td class="td-m">${esc(row.gl_name)}</td><td class="td-m">${esc(row.bu)}</td><td class="td-m">${esc(row.dept)}</td><td class="td-m">${esc(row.vendor)}</td>${futP.map(p=>`<td class="td-r">${row.amts[p]?fmtF(row.amts[p]):'—'}</td>`).join('')}<td class="td-r" style="font-weight:700">${fmtF(tot)}</td></tr>`;}).join('');
+}
+
+// ── ACCRUALS ──────────────────────────────────────────
+function getAccSuggestions(targetP){
+  const allP=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
+  const idx=allP.indexOf(targetP);if(idx<2)return[];
+  const priorP=allP[idx-1];const lb=allP.slice(Math.max(0,idx-6),idx);
+  const combos={};
+  AP.filter(r=>lb.includes(r.period)).forEach(r=>{const k=r.vendor+'|||'+r.account+'|||'+r.dept;if(!combos[k])combos[k]={vendor:r.vendor,account:r.account,dept:r.dept,cc:r.cc,amts:{},priorAmt:0};combos[k].amts[r.period]=(combos[k].amts[r.period]||0)+r.amount;});
+  AP.filter(r=>r.period===priorP).forEach(r=>{const k=r.vendor+'|||'+r.account+'|||'+r.dept;if(combos[k])combos[k].priorAmt+=r.amount;});
+  const currActuals={};AP.filter(r=>r.period===targetP).forEach(r=>{const k=r.vendor+'|||'+r.account+'|||'+r.dept;currActuals[k]=(currActuals[k]||0)+r.amount;});
+  const suggestions=[];
+  Object.entries(combos).forEach(([key,combo])=>{
+    const n=Object.keys(combo.amts).length;const avg=Object.values(combo.amts).reduce((s,v)=>s+v,0)/n;const freq=n/lb.length;
+    if(avg<250||freq<0.33)return;
+    const currAmt=currActuals[key]||0;const priorAmt=combo.priorAmt;
+    // Fuzzy vendor match: try vendor-level first (90%+ name similarity + same GL)
+    const vendorMatch=getFcstForVendor(combo.vendor,combo.account,combo.dept,targetP);
+    const fcstAmt=vendorMatch.amount!==null?vendorMatch.amount:null;
+    const fcstVendorName=vendorMatch.vendor;const fcstMatchScore=vendorMatch.score;const fcstDeptScore=vendorMatch.dept_match_score||0;
+    const glMismatch=vendorMatch.gl_mismatch||false;const deptMismatch=vendorMatch.dept_mismatch||false;const apGL=vendorMatch.ap_gl||null;const fcstGL=vendorMatch.fcst_gl||null;const fcstGLName=vendorMatch.fcst_gl_name||null;
+    let fcstRisk='unknown';
+    if(fcstAmt!==null){const d=Math.abs(currAmt-fcstAmt)/Math.max(Math.abs(fcstAmt),1);fcstRisk=d<0.15?'aligned':d<0.4?'minor':'major';}
+    const gap=avg-currAmt;if(gap<250)return; // not enough gap vs history to flag
+    // Suggested accrual: use forecast - actuals when a clean forecast match exists
+    // For GL mismatch or no-forecast cases, fall back to historical avg - actuals
+    const suggestedAccrual=(fcstAmt!==null&&!glMismatch&&!deptMismatch)?Math.round(fcstAmt-currAmt):Math.round(gap);
+    // Skip if forecast exists (clean match) and actuals already met or exceeded it
+    if(fcstAmt!==null&&!glMismatch&&!deptMismatch&&fcstAmt<=currAmt)return;
+    let confidence='low';
+    if(fcstRisk==='aligned')confidence='low';else if(freq>=0.83&&Math.abs(avg)>1000)confidence='high';else if(freq>=0.5)confidence='medium';
+    suggestions.push({key,vendor:combo.vendor,account:combo.account,dept:combo.dept,cc:combo.cc,suggested_amount:suggestedAccrual,curr_month:currAmt,prior_month:priorAmt,six_mo_avg:Math.round(avg),frequency:freq,periods_seen:n,lookback_count:lb.length,confidence,fcst_risk:fcstRisk,fcst_amount:fcstAmt,fcst_vendor:fcstVendorName,fcst_match_score:fcstMatchScore,fcst_dept:vendorMatch.fcst_dept||null,fcst_dept_score:fcstDeptScore,gl_mismatch:glMismatch,dept_mismatch:deptMismatch,ap_gl:apGL,fcst_gl:fcstGL,fcst_gl_name:fcstGLName});
+  });
+  const ord={high:0,medium:1,low:2};
+  return suggestions.sort((a,b)=>ord[a.confidence]-ord[b.confidence]||b.suggested_amount-a.suggested_amount);
+}
+
+function renderAccruals(){
+  const scrollY=window.scrollY||document.documentElement.scrollTop;
+  const has=AP.length>0;document.getElementById('acc-empty').style.display=has?'none':'block';document.getElementById('acc-content').style.display=has?'block':'none';if(!has)return;
+  const allP=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
+  const sel=document.getElementById('acc-period');const curP=sel.value||allP[allP.length-1];
+  sel.innerHTML='<option value="">Select period</option>'+allP.map(p=>`<option value="${p}"${p===curP?' selected':''}>${p} — ${toML(p)}</option>`).join('');
+  if(!sel.value&&curP)sel.value=curP;
+  initMS('ms-acc-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean),renderAccruals);
+  initMS('ms-acc-dept',[...new Set(AP.map(r=>r.dept))].filter(Boolean),renderAccruals);
+  initMS('ms-acc-gl',[...new Set(AP.map(r=>r.account))].filter(Boolean),renderAccruals);
+  initMS('ms-acc-cc',[...new Set(AP.map(r=>r.cc))].filter(Boolean),renderAccruals);
+  const period=sel.value||curP;
+  let sugg=getAccSuggestions(period);
+  const cF=selVal('acc-conf');if(cF)sugg=sugg.filter(s=>s.confidence===cF);
+  sugg=msFilter(sugg,'ms-acc-vendor','vendor');sugg=msFilter(sugg,'ms-acc-dept','dept');sugg=msFilter(sugg,'ms-acc-gl','account');sugg=msFilter(sugg,'ms-acc-cc','cc');
+  const approved=sugg.filter(s=>ACC_DEC[period+'|||'+s.key]==='approved');
+  const totS=sugg.reduce((s,r)=>s+r.suggested_amount,0);
+  document.getElementById('acc-stats').style.display=sugg.length?'grid':'none';
+  document.getElementById('acc-cnt').textContent=sugg.length;document.getElementById('acc-total').textContent=fmt(totS);
+  document.getElementById('acc-high').textContent=sugg.filter(s=>s.confidence==='high').length;
+  document.getElementById('acc-med').textContent=sugg.filter(s=>s.confidence==='medium').length;
+  document.getElementById('acc-low').textContent=sugg.filter(s=>s.confidence==='low').length;
+  const pending=sugg.filter(s=>!ACC_DEC[period+'|||'+s.key]);
+  const badge=document.getElementById('badge-accruals');if(pending.length){badge.style.display='inline';badge.textContent=pending.length;}else badge.style.display='none';
+  const alert=document.getElementById('acc-alert');
+  if(!sugg.length){alert.style.display='block';alert.className='alert al-ok';alert.textContent=allP.indexOf(period)<2?'Need at least 3 months of history.':`No accrual gaps detected for ${period}.`;}else alert.style.display='none';
+  document.getElementById('acc-exp-row').style.display=approved.length?'block':'none';
+  document.getElementById('acc-list').innerHTML=sugg.map(s=>{
+    const dec=ACC_DEC[period+'|||'+s.key];const bc=s.confidence==='high'?'b-high':s.confidence==='medium'?'b-med':'b-low';
+    const fb=s.fcst_risk==='aligned'?'<span class="badge b-low">Fcst Aligned</span>':s.fcst_risk==='minor'?'<span class="badge b-med">Minor Fcst Gap</span>':s.fcst_risk==='major'?'<span class="badge b-high">Fcst Misaligned</span>':'<span class="badge b-none">No Fcst</span>';
+    return`<div class="acc-card ${dec||''}" style="${s.gl_mismatch||s.dept_mismatch?'border:2px solid var(--yellow-border) !important;background:var(--yellow-light) !important;':''}">
+      <div class="acc-top"><div class="acc-info">
+      <div class="acc-vendor">${esc(s.vendor)} <span class="tag tag-gl">${esc(s.account)}</span></div>
+      <div class="acc-meta"><span class="badge ${bc}">${s.confidence} risk</span>${fb}${s.gl_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL Mismatch — Review Coding</span>`:s.dept_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept Mismatch — Review Coding</span>`:''}<span>Dept: ${esc(s.dept)||'—'}</span><span>${s.periods_seen}/${s.lookback_count} months (${Math.round(s.frequency*100)}%)</span>${s.cc?`<span>CC: ${esc(s.cc)}</span>`:''}</div>
+      <div class="acc-amounts" style="grid-template-columns:repeat(5,1fr)">
+        <div class="acc-amt-cell"><div class="acc-amt-label">Current Month</div><div class="acc-amt-val ${s.curr_month>0&&s.curr_month<s.six_mo_avg*0.5?'highlight':''}">${fmtF(s.curr_month)}</div></div>
+        <div class="acc-amt-cell"><div class="acc-amt-label">Prior Month</div><div class="acc-amt-val">${fmtF(s.prior_month)}</div></div>
+        <div class="acc-amt-cell"><div class="acc-amt-label">6-Mo Avg</div><div class="acc-amt-val">${fmtF(s.six_mo_avg)}</div></div>
+        <div class="acc-amt-cell" style="background:var(--blue-light);border-radius:var(--rsm)">
+          <div class="acc-amt-label" style="color:var(--blue)">Current Forecast</div>
+          <div class="acc-amt-val" style="color:var(--blue)">${s.fcst_amount!==null?fmtF(s.fcst_amount):'—'}</div>
+          ${s.gl_mismatch?`<div style="font-size:9px;color:var(--yellow);margin-top:2px;font-weight:600">⚠ GL mismatch</div>`
+            :s.dept_mismatch&&s.no_dept_match?`<div style="font-size:9px;color:var(--yellow);margin-top:2px;font-weight:600">⚠ Multiple dept rows — no match</div>`
+            :s.dept_mismatch?`<div style="font-size:9px;color:var(--yellow);margin-top:2px;font-weight:600">⚠ Dept mismatch</div>`
+            :s.fcst_vendor?`<div style="font-size:9px;color:var(--blue);margin-top:2px" title="Matched to: ${esc(s.fcst_vendor)}">Matched: ${esc(s.fcst_vendor.length>22?s.fcst_vendor.slice(0,22)+'…':s.fcst_vendor)} (${Math.round((s.fcst_match_score||0)*100)}%)</div>`
+            :`<div style="font-size:9px;color:var(--text3);margin-top:2px">No vendor match found</div>`}
+        </div>
+        <div class="acc-amt-cell" style="background:var(--accent-light);border-radius:var(--rsm)">
+          <div class="acc-amt-label" style="color:var(--accent)">Suggested Accrual</div>
+          <div class="acc-amt-val" style="color:var(--accent)">${fmtF(s.suggested_amount)}</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:2px">${s.fcst_amount!==null?'Fcst − Actuals':'Hist avg − Actuals'}</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:var(--text3);display:flex;gap:16px;flex-wrap:wrap">
+        ${s.fcst_amount!==null
+          ? s.gl_mismatch
+            ? `<span style="color:var(--yellow)"><strong>⚠ GL CODE MISMATCH — No forecast amount shown:</strong> Vendor matched as "${esc(s.fcst_vendor)}" (${Math.round((s.fcst_match_score||0)*100)}% name similarity) but GL codes differ — AP uses <strong>${esc(s.ap_gl||s.account)}</strong>, Forecast uses <strong>${esc(s.fcst_gl)}</strong> (${esc(s.fcst_gl_name||'')}). Forecast amount is only shown on the correctly-coded GL row. Recode this AP transaction to ${esc(s.fcst_gl)} or update the Adaptive forecast to ${esc(s.ap_gl||s.account)} to resolve. Accrual suggestion based on historical average only.</span>`
+            : s.dept_mismatch
+            ? `<span style="color:var(--yellow)"><strong>⚠ DEPT/COST CENTER MISMATCH — Review needed:</strong> Vendor matched as "${esc(s.fcst_vendor)}" (${Math.round((s.fcst_match_score||0)*100)}% name sim) but department coding differs — AP dept: <strong>${esc(s.dept)}</strong>, Forecast dept: <strong>${esc(s.fcst_dept||'—')}</strong>. Forecast may belong to a different cost center. Verify coding before booking accrual. &nbsp;·&nbsp; Fcst: ${fmtF(s.fcst_amount)} &nbsp;·&nbsp; Actuals: ${fmtF(s.curr_month)} &nbsp;·&nbsp; Remaining: ${fmtF(s.fcst_amount-s.curr_month)}</span>`
+            : `<span><strong>Fcst vendor match:</strong> "${esc(s.fcst_vendor)}" (${Math.round((s.fcst_match_score||0)*100)}% name sim) &nbsp;·&nbsp; <strong>Fcst dept:</strong> ${esc(s.fcst_dept||'—')} (dept match: ${Math.round((s.fcst_dept_score||0)*100)}%) &nbsp;·&nbsp; <strong>Fcst:</strong> ${fmtF(s.fcst_amount)} &nbsp;·&nbsp; <strong>Actuals so far:</strong> ${fmtF(s.curr_month)} &nbsp;·&nbsp; <strong>Remaining:</strong> ${fmtF(s.fcst_amount-s.curr_month)} &nbsp;·&nbsp; ${s.fcst_risk==='aligned'?'Forecast aligned — low accrual risk.':s.fcst_risk==='minor'?'Minor gap vs forecast.':'Actuals significantly below forecast — review accrual.'}</span>`
+          : s.fcst_vendor&&s.no_dept_match
+          ? `<span style="color:var(--yellow)"><strong>⚠ DEPT AMBIGUOUS:</strong> "${esc(s.fcst_vendor)}" found in Adaptive forecast under multiple departments for this GL. Cannot determine which forecast row matches AP dept "${esc(s.dept)}" — no forecast amount shown. Align cost center coding in NetSuite and Adaptive to enable automatic matching.</span>`
+          : `<span style="color:var(--text3)">No forecast vendor match found for this vendor (GL: ${esc(s.account)}, Dept: ${esc(s.dept)}). Accrual suggestion based on historical average only.</span>`
+        }
+      </div>
+    </div>
+    <div class="acc-actions">${dec==='approved'?`<span class="badge b-app">Approved</span> <button class="btn btn-sm" onclick="decide('${esc(period)}','${esc(s.key)}',null)">Undo</button>`:dec==='rejected'?`<span class="badge b-rej">Rejected</span> <button class="btn btn-sm" onclick="decide('${esc(period)}','${esc(s.key)}',null)">Undo</button>`:`<button class="btn btn-sm btn-green" onclick="decide('${esc(period)}','${esc(s.key)}','approved')">Approve</button><button class="btn btn-sm btn-red" onclick="decide('${esc(period)}','${esc(s.key)}','rejected')">Reject</button>`}</div>
+    </div></div>`;
+  }).join('');
+  requestAnimationFrame(()=>window.scrollTo(0,scrollY));
+}
+async function decide(p,k,d){const dk=p+'|||'+k;if(d===null)delete ACC_DEC[dk];else ACC_DEC[dk]=d;await save();renderAccruals();renderApproved();}
+
+// ── NEEDS ATTENTION ───────────────────────────────────
+let ATTN_DRIFT_ALL=[], ATTN_CODING_ALL=[];
+
+function switchAttnTab(tab){
+  const isDollar=tab==='dollar';
+  document.getElementById('attn-dollar-view').style.display=isDollar?'block':'none';
+  document.getElementById('attn-coding-view').style.display=isDollar?'none':'block';
+  document.getElementById('attn-tab-dollar').style.background=isDollar?'var(--accent)':'var(--surface)';
+  document.getElementById('attn-tab-dollar').style.color=isDollar?'#fff':'var(--text2)';
+  document.getElementById('attn-tab-coding').style.background=isDollar?'var(--surface)':'var(--accent)';
+  document.getElementById('attn-tab-coding').style.color=isDollar?'var(--text2)':'#fff';
+  if(!isDollar)renderCodingIssues();
+}
+
+function renderAttention(){
+  const has=AP.length>0&&FC.length>0;
+  document.getElementById('attn-empty').style.display=has?'none':'block';
+  document.getElementById('attn-content').style.display=has?'block':'none';
+  if(!has)return;
+
+  const apPeriods=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
+  const last6AP=apPeriods.slice(-6);
+  const latestAP=apPeriods[apPeriods.length-1];
+  const futureFCPeriods=FC_PERIODS.filter(p=>p>latestAP).sort().slice(0,6);
+
+  initMS('ms-attn-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean),renderAttention);
+  initMS('ms-attn-dept',[...new Set(AP.map(r=>r.dept))].filter(Boolean),renderAttention);
+  initMS('ms-attn-gl',[...new Set(AP.map(r=>r.account))].filter(Boolean),renderAttention);
+  initMS('ms-attn-bu',[...new Set(FC.map(r=>r.bu))].filter(Boolean),renderAttention);
+  initMS('ms-coding-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean),renderCodingIssues);
+
+  const threshold=parseInt(document.getElementById('attn-threshold')?.value||'10');
+  const dirFilter=document.getElementById('attn-direction')?.value||'';
+
+  // Build vendor actuals (last 6 months)
+  const vendorActuals={};
+  AP.filter(r=>last6AP.includes(r.period)).forEach(r=>{
+    const k=r.vendor+'|||'+r.account+'|||'+r.dept;
+    if(!vendorActuals[k])vendorActuals[k]={vendor:r.vendor,gl:r.account,dept:r.dept,cc:r.cc,cls:r.cls,periods:{}};
+    vendorActuals[k].periods[r.period]=(vendorActuals[k].periods[r.period]||0)+r.amount;
+  });
+
+  ATTN_DRIFT_ALL=[];
+  ATTN_CODING_ALL=[];
+
+  Object.values(vendorActuals).forEach(va=>{
+    const actAmts=last6AP.map(p=>va.periods[p]||0);
+    const actAvg=actAmts.reduce((s,v)=>s+v,0)/Math.max(last6AP.length,1);
+    if(Math.abs(actAvg)<100)return;
+
+    const matchKey=va.vendor+'||'+va.gl+'||'+va.dept;
+    const fcMatch=VENDOR_MATCH_CACHE[matchKey];
+
+    if(!fcMatch){
+      // Check if vendor exists in forecast for this GL under a different dept
+      const vendorInFcstSameGL=Object.values(VENDOR_MATCH_CACHE).find(m=>trigramSim(va.vendor,m.fcst_vendor||'')>=0.85&&m.gl_code===va.gl);
+      if(vendorInFcstSameGL){ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:vendorInFcstSameGL.fcst_vendor,score:trigramSim(va.vendor,vendorInFcstSameGL.fcst_vendor||''),issue:'Missing Forecast — Wrong Dept',ap_gl:va.gl,fcst_gl:vendorInFcstSameGL.gl_code,ap_dept:va.dept,fcst_dept:vendorInFcstSameGL.fcst_dept||'—',rec:`AP has spend for "${va.vendor}" in dept "${va.dept}" but Adaptive forecast only has this vendor under "${vendorInFcstSameGL.fcst_dept}". Either the AP transaction is miscoded or the forecast needs a new line for dept "${va.dept}".`});}
+      // Cross-GL mismatch detection
+      let bestScore=0,bestMatch=null;
+      Object.values(VENDOR_MATCH_CACHE).forEach(m=>{const s=trigramSim(va.vendor,m.fcst_vendor||'');if(s>bestScore&&s>=0.85&&m.gl_code!==va.gl){bestScore=s;bestMatch=m;}});
+      if(bestMatch){ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:bestMatch.fcst_vendor,score:bestScore,issue:'GL Mismatch (unmatched)',ap_gl:va.gl,fcst_gl:bestMatch.gl_code,ap_dept:va.dept,fcst_dept:bestMatch.fcst_dept||'—',rec:`Vendor found in Adaptive under GL "${bestMatch.gl_code}" but AP uses "${va.gl}". Align GL coding in NetSuite or Adaptive.`});}
+      // Rule: 3+ months actuals, zero future forecast — flag in BOTH views
+      const activeMonths=actAmts.filter(v=>v>0).length;
+      if(activeMonths>=3&&actAvg>100){
+        const glName=(FC.find(r=>r.gl_code===va.gl)||{}).gl_name||va.gl;
+        ATTN_DRIFT_ALL.push({vendor:va.vendor,fcst_vendor:'— Not in Adaptive forecast',match_score:0,gl:va.gl,gl_name:glName,dept:va.dept,cc:va.cc,bu:va.cls||'',actAmts,actAvg,fcstAmts:new Array(futureFCPeriods.length).fill(0),fcstAvg:0,variance:-actAvg,varPct:-100,isFav:false,glMismatch:false,deptMismatch:false,noForecast:true,activeMonths,why:`Active vendor with ${activeMonths}/6 months of actuals (avg ${fmtF(actAvg)}/mo) but NO forecast for next 6 months. Add to Adaptive forecast immediately.`,last6AP,futureFCPeriods});
+        if(!vendorInFcstSameGL&&!bestMatch){ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:'Not in Adaptive',score:0,issue:'Missing Forecast — Not in Adaptive',ap_gl:va.gl,fcst_gl:'—',ap_dept:va.dept,fcst_dept:'—',rec:`"${va.vendor}" has actuals in ${activeMonths}/6 months (avg ${fmtF(actAvg)}/mo) but is completely absent from Adaptive forecast. Add this vendor to ensure accurate planning.`});}
+      }
+      return;
+    }
+
+    // Flag coding issues
+    if(fcMatch.gl_mismatch){
+      ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,score:fcMatch.score,issue:'GL Mismatch',ap_gl:va.gl,fcst_gl:fcMatch.gl_code,ap_dept:va.dept,fcst_dept:fcMatch.fcst_dept||'—',rec:`AP uses GL "${va.gl}", Adaptive forecast uses "${fcMatch.gl_code}". Verify which is correct and align both systems.`});
+    } else if(fcMatch.dept_mismatch&&fcMatch.no_dept_match){
+      // Vendor found in forecast under multiple depts — add to coding issues but skip dollar analysis
+      ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,score:fcMatch.score,issue:'Dept Ambiguous (Multiple Rows)',ap_gl:va.gl,fcst_gl:fcMatch.gl_code,ap_dept:va.dept,fcst_dept:'Multiple depts in forecast',rec:`${va.vendor} appears in Adaptive forecast under multiple departments for GL ${va.gl}. AP dept is "${va.dept}". Align cost center coding so each dept row can be uniquely matched.`});
+      return; // skip dollar comparison — can't show meaningful variance
+    } else if(fcMatch.dept_mismatch){
+      ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,score:fcMatch.score,issue:'Dept / CC Mismatch',ap_gl:va.gl,fcst_gl:fcMatch.gl_code,ap_dept:va.dept,fcst_dept:fcMatch.fcst_dept||'—',rec:`AP department "${va.dept}" does not align with Adaptive cost center "${fcMatch.fcst_dept}". Update cost center in NetSuite or department mapping in Adaptive.`});
+    }
+
+    // Dollar variance comparison
+    const fcstAmts=futureFCPeriods.map(p=>(fcMatch.periods||{})[p]||0);
+    const fcstAvg=fcstAmts.reduce((s,v)=>s+v,0)/Math.max(futureFCPeriods.length,1);
+    if(fcstAvg===0&&actAvg===0)return;
+    const variance=fcstAvg-actAvg;
+    const varPct=actAvg!==0?(variance/Math.abs(actAvg)*100):(fcstAvg!==0?100:0);
+    if(Math.abs(varPct)<1)return; // store all, filter later by threshold
+
+    const isFav=variance>0;
+    const glName=(FC.find(r=>r.gl_code===va.gl)||{}).gl_name||va.gl;
+    const bu=fcMatch.bu||va.cls||'';
+    const why=!isFav
+      ?`Actuals avg ${fmtF(actAvg)}/mo is ${Math.abs(varPct).toFixed(0)}% above forecast avg ${fmtF(fcstAvg)}/mo. Forecast may be understated — consider increasing to reflect actual spend run rate.`
+      :`Forecast avg ${fmtF(fcstAvg)}/mo is ${Math.abs(varPct).toFixed(0)}% above actuals avg ${fmtF(actAvg)}/mo. If spend is declining, reduce forecast. If ramp is planned, no change needed.`;
+
+    ATTN_DRIFT_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,match_score:fcMatch.score,gl:va.gl,gl_name:glName,dept:va.dept,cc:va.cc,bu,actAmts,actAvg,fcstAmts,fcstAvg,variance,varPct,isFav,glMismatch:fcMatch.gl_mismatch,deptMismatch:fcMatch.dept_mismatch,why,last6AP,futureFCPeriods});
+  });
+
+  // Deduplicate coding issues
+  const seen=new Set();
+  ATTN_CODING_ALL=ATTN_CODING_ALL.filter(i=>{const k=i.vendor+'||'+i.issue+'||'+i.ap_gl;if(seen.has(k))return false;seen.add(k);return true;});
+
+  // Update badge
+  const tot=ATTN_DRIFT_ALL.filter(d=>Math.abs(d.varPct)>=threshold).length+ATTN_CODING_ALL.length;
+  const badge=document.getElementById('badge-attn');
+  if(tot>0){badge.style.display='inline';badge.textContent=tot;}else badge.style.display='none';
+
+  renderDollarView(threshold,dirFilter);
+  renderCodingIssues();
+}
+
+let ATTN_SORT={col:'varPct',dir:-1}; // default: sort by variance % descending
+
+function sortAttn(col){
+  if(ATTN_SORT.col===col)ATTN_SORT.dir*=-1;
+  else{ATTN_SORT.col=col;ATTN_SORT.dir=-1;}
+  renderDollarView();
+}
+function sortIcon(col){return ATTN_SORT.col===col?(ATTN_SORT.dir===-1?'▼':'▲'):'⇅';}
+
+  threshold=threshold||parseInt(document.getElementById('attn-threshold')?.value||'10');
+  dirFilter=dirFilter||document.getElementById('attn-direction')?.value||'';
+
+  const vendorF=getMS('ms-attn-vendor'),deptF=getMS('ms-attn-dept'),glF=getMS('ms-attn-gl');
+
+  let items=ATTN_DRIFT_ALL.filter(d=>Math.abs(d.varPct)>=threshold);
+  if(dirFilter==='unfav')items=items.filter(d=>!d.isFav);
+  if(dirFilter==='fav')items=items.filter(d=>d.isFav);
+  if(vendorF)items=items.filter(d=>vendorF.includes(d.vendor));
+  if(deptF)items=items.filter(d=>deptF.includes(d.dept));
+  if(glF)items=items.filter(d=>glF.includes(d.gl));
+  items.sort((a,b)=>Math.abs(b.varPct)-Math.abs(a.varPct));
+
+  const unfav=items.filter(d=>!d.isFav).length;
+  const fav=items.filter(d=>d.isFav).length;
+  const totalVar=items.reduce((s,d)=>s+d.variance,0);
+  document.getElementById('attn-total').textContent=items.length;
+  document.getElementById('attn-drift').textContent=unfav;
+  document.getElementById('attn-spikes').textContent=fav;
+  document.getElementById('attn-var-total').textContent=fmt(totalVar);
+
+  items.sort((a,b)=>ATTN_SORT.dir*(Math.abs(b[ATTN_SORT.col]||0)-Math.abs(a[ATTN_SORT.col]||0)));
+  // Update sort icons
+  ['actAvg','fcstAvg','variance','varPct'].forEach(col=>{const el=document.getElementById('si-'+col);if(el)el.textContent=sortIcon(col);});
+  // Update period labels in headers from first item
+  if(items.length>0){
+    const d0=items[0];
+    const thead=document.querySelector('#attn-drift-tbody')?.closest('table')?.querySelector('thead tr');
+    if(thead){
+      const cells=[...thead.cells];const actStart=7;
+      d0.last6AP.forEach((p,i)=>{if(cells[actStart+i])cells[actStart+i].textContent=toML(p);});
+      const fcstStart=actStart+7;
+      d0.futureFCPeriods.forEach((p,i)=>{if(cells[fcstStart+i])cells[fcstStart+i].textContent=toML(p);});
+    }
+  }
+  document.getElementById('attn-drift-tbody').innerHTML=items.map(d=>{
+    const dirBadge=d.noForecast
+      ?'<span class="badge b-high" style="background:var(--purple-light);color:var(--purple);border-color:var(--purple-border)">⚠ No Forecast</span>'
+      :d.isFav
+      ?'<span class="badge b-low" style="background:var(--green-light);color:var(--green);border-color:var(--green-border)">▲ Favourable</span>'
+      :'<span class="badge b-high">▼ Unfavourable</span>';
+    const mNote=d.glMismatch?'<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border);font-size:9px;margin-left:3px">⚠GL</span>':d.deptMismatch?'<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border);font-size:9px;margin-left:3px">⚠Dept</span>':'';
+    const actCells=d.actAmts.map((v,i)=>`<td class="td-r" style="font-size:10px;color:var(--text3)">${v?fmt(v):'—'}</td>`).join('');
+    const fcstCells=d.fcstAmts.map(v=>`<td class="td-r" style="font-size:10px;color:var(--blue)">${v?fmt(v):'—'}</td>`).join('');
+    const varClass=!d.isFav?'var-pos':'var-neg';
+    const rowBg=d.glMismatch||d.deptMismatch?'background:var(--yellow-light)':'';
+    return`<tr style="${rowBg}">
+      <td style="font-weight:600;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.vendor)}">${esc(d.vendor)}</td>
+      <td style="font-size:10px;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.fcst_vendor)}">${esc(d.fcst_vendor)}${mNote}<br><span style="font-size:9px">${Math.round(d.match_score*100)}%</span></td>
+      <td><span class="tag tag-gl" style="font-size:9px;white-space:nowrap">${esc(d.gl)}</span></td>
+      <td style="font-size:10px;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.gl_name)}">${esc(d.gl_name)}</td>
+      <td style="font-size:10px;color:var(--text3);max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.dept)}">${esc(d.dept)}</td>
+      <td style="font-size:10px;color:var(--text3);max-width:80px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.cc)}">${esc(d.cc)}</td>
+      <td style="font-size:10px;color:var(--text3)">${esc(d.bu)}</td>
+      ${actCells}
+      <td class="td-r" style="font-weight:700;font-size:11px">${fmtF(d.actAvg)}</td>
+      ${fcstCells}
+      <td class="td-r" style="font-weight:700;color:var(--blue);font-size:11px">${fmtF(d.fcstAvg)}</td>
+      <td class="td-r ${varClass}" style="font-weight:700;font-size:11px">${fmtF(d.variance)}</td>
+      <td class="td-r ${varClass}" style="font-weight:700;font-size:11px">${fmtP(d.varPct)}</td>
+      <td>${dirBadge}</td>
+      <td style="font-size:10px;color:var(--text2);max-width:160px">${d.why}</td>
+    </tr>`;
+  }).join('');
+
+function renderCodingIssues(){
+  const vendorF=getMS('ms-coding-vendor');
+  const typeF=document.getElementById('coding-issue-type')?.value||'';
+  let items=[...ATTN_CODING_ALL];
+  if(vendorF)items=items.filter(i=>vendorF.includes(i.vendor));
+  if(typeF)items=items.filter(i=>i.issue===typeF||i.issue.startsWith(typeF));
+  const glCnt=items.filter(i=>i.issue.includes('GL')).length;
+  const deptCnt=items.filter(i=>i.issue.includes('Dept')).length;
+  document.getElementById('attn-gaps').textContent=items.length;
+  const glEl=document.getElementById('attn-gl-cnt');if(glEl)glEl.textContent=glCnt;
+  const deptEl=document.getElementById('attn-dept-cnt');if(deptEl)deptEl.textContent=deptCnt;
+  document.getElementById('attn-gap-tbody').innerHTML=items.map(i=>{
+    const ic=i.issue.includes('GL')?'b-high':'b-med';
+    return`<tr style="background:var(--yellow-light)">
+      <td style="font-weight:600">${esc(i.vendor)}</td>
+      <td style="color:var(--text3);font-size:12px">${esc(i.fcst_vendor)}</td>
+      <td style="font-size:12px">${Math.round((i.score||0)*100)}%</td>
+      <td><span class="badge ${ic}">${esc(i.issue)}</span></td>
+      <td><span class="tag tag-gl" style="font-size:10px">${esc(i.ap_gl)}</span></td>
+      <td><span class="tag" style="font-size:10px;background:var(--yellow-light);border-color:var(--yellow-border);color:var(--yellow)">${esc(i.fcst_gl)}</span></td>
+      <td class="td-m" style="font-size:11px">${esc(i.ap_dept)}</td>
+      <td class="td-m" style="font-size:11px">${esc(i.fcst_dept)}</td>
+      <td style="font-size:11px;color:var(--text2)">${esc(i.rec)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function expAttn(){
+  const threshold=parseInt(document.getElementById('attn-threshold')?.value||'10');
+  const items=ATTN_DRIFT_ALL.filter(d=>Math.abs(d.varPct)>=threshold);
+  const rows=[['Vendor','Fcst Vendor','GL Code','GL Name','Department','Cost Center','BU',...(items[0]?.last6AP||[]),'6-Mo Avg Actual',...(items[0]?.futureFCPeriods||[]),'Avg Fcst (6-mo)','Variance $','Variance %','Direction','Explanation']];
+  items.forEach(d=>rows.push([d.vendor,d.fcst_vendor,d.gl,d.gl_name,d.dept,d.cc,d.bu,...d.actAmts,d.actAvg,...d.fcstAmts,d.fcstAvg,d.variance,d.varPct.toFixed(1)+'%',d.isFav?'Favourable':'Unfavourable',d.why]));
+  dlCSV(rows,'forecast_discrepancy_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function expCoding(){
+  const rows=[['Vendor','Fcst Vendor','Match %','Issue Type','AP GL','Fcst GL','AP Dept','Fcst Dept/CC','Recommendation']];
+  ATTN_CODING_ALL.forEach(i=>rows.push([i.vendor,i.fcst_vendor,Math.round((i.score||0)*100)+'%',i.issue,i.ap_gl,i.fcst_gl,i.ap_dept,i.fcst_dept,i.rec]));
+  dlCSV(rows,'coding_issues_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function renderApproved(){
+  // Get the currently selected close period from accruals tab
+  const period=document.getElementById('acc-period')?.value||[...new Set(AP.map(r=>r.period))].filter(Boolean).sort().slice(-1)[0]||'';
+  const allSugg=getAccSuggestions(period);
+  const approved=allSugg.filter(s=>ACC_DEC[period+'|||'+s.key]==='approved');
+  const has=approved.length>0;
+  document.getElementById('appr-empty').style.display=has?'none':'block';
+  document.getElementById('appr-content').style.display=has?'block':'none';
+  // Update sidebar badge
+  const badge=document.getElementById('badge-approved');
+  if(approved.length){badge.style.display='inline';badge.textContent=approved.length;}else badge.style.display='none';
+  if(!has)return;
+  const total=approved.reduce((s,r)=>s+r.suggested_amount,0);
+  const high=approved.filter(s=>s.confidence==='high').length;
+  document.getElementById('appr-count').textContent=approved.length;
+  document.getElementById('appr-total').textContent=fmt(total);
+  document.getElementById('appr-high').textContent=high;
+  document.getElementById('appr-period').textContent=period?period+' — '+toML(period):'—';
+  document.getElementById('appr-footer').textContent=`${approved.length} approved accruals totaling ${fmtF(total)} for ${period}. Generated ${new Date().toLocaleDateString()}.`;
+  document.getElementById('appr-tbody').innerHTML=approved.map(s=>{
+    const basisLabel=s.fcst_amount!==null?'Fcst − Actuals':'Hist Avg − Actuals';
+    const riskClass=s.confidence==='high'?'b-high':s.confidence==='medium'?'b-med':'b-low';
+    const mismatchBadge=s.gl_mismatch?'<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL</span>':s.dept_mismatch?'<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept</span>':'<span class="badge b-on">✓</span>';
+    return`<tr style="${s.gl_mismatch||s.dept_mismatch?'background:var(--yellow-light)':''}">
+      <td style="font-weight:600">${esc(s.vendor)}</td>
+      <td><span class="tag tag-gl">${esc(s.account)}</span></td>
+      <td class="td-m">${esc(s.account.split(':').slice(1).join(':').trim()||s.account)}</td>
+      <td class="td-m">${esc(s.dept)}</td>
+      <td class="td-m">${esc(s.cc)}</td>
+      <td class="td-r">${fmtF(s.curr_month)}</td>
+      <td class="td-r">${fmtF(s.prior_month)}</td>
+      <td class="td-r">${fmtF(s.six_mo_avg)}</td>
+      <td class="td-r">${s.fcst_amount!==null?fmtF(s.fcst_amount):'—'}</td>
+      <td class="td-r" style="font-weight:700;color:var(--green)">${fmtF(s.suggested_amount)}</td>
+      <td style="font-size:11px;color:var(--text3)">${basisLabel}</td>
+      <td><span class="badge ${riskClass}">${s.confidence}</span></td>
+      <td>${mismatchBadge}</td>
+      <td><button class="btn btn-sm btn-red" onclick="unapprove('${esc(period)}','${esc(s.key)}')">Remove</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function unapprove(period,key){
+  delete ACC_DEC[period+'|||'+key];
+  await save();
+  renderAccruals();
+  renderApproved();
+}
+
+function expApproved(){
+  const period=document.getElementById('acc-period')?.value||'';
+  const approved=getAccSuggestions(period).filter(s=>ACC_DEC[period+'|||'+s.key]==='approved');
+  dlCSV([
+    ['Period','Vendor','GL Code','Department','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Accrual Amount','Basis','Risk Level','Fcst Match Status']
+  ].concat(approved.map(s=>[
+    period,s.vendor,s.account,s.dept,s.cc,
+    s.curr_month,s.prior_month,s.six_mo_avg,
+    s.fcst_amount!==null?s.fcst_amount:'N/A',
+    s.suggested_amount,
+    s.fcst_amount!==null?'Fcst - Actuals':'Hist Avg - Actuals',
+    s.confidence,
+    s.gl_mismatch?'GL Mismatch':s.dept_mismatch?'Dept Mismatch':'Clean Match'
+  ])),'current_month_accruals_'+period+'.csv');
+}
+
+function getSOTF(){
+  let d=[...AP];
+  const sv=id=>document.getElementById(id)?.value||'';const srch=(sv('sot-search')||'').toLowerCase();
+  if(sv('sot-period'))d=d.filter(r=>r.period===sv('sot-period'));
+  if(sv('sot-sub'))d=d.filter(r=>r.sub===sv('sot-sub'));
+  if(sv('sot-dept'))d=d.filter(r=>r.dept===sv('sot-dept'));
+  if(sv('sot-vendor'))d=d.filter(r=>r.vendor===sv('sot-vendor'));
+  if(sv('sot-gl'))d=d.filter(r=>r.account===sv('sot-gl'));
+  if(sv('sot-cc'))d=d.filter(r=>r.cc===sv('sot-cc'));
+  if(sv('sot-type'))d=d.filter(r=>r.type===sv('sot-type'));
+  if(srch)d=d.filter(r=>r.vendor.toLowerCase().includes(srch)||r.memo.toLowerCase().includes(srch)||r.account.toLowerCase().includes(srch));
+  return d;
+}
+function renderSOT(){
+  const has=AP.length>0;
+  document.getElementById('sot-empty').style.display=has?'none':'block';
+  document.getElementById('sot-content').style.display=has?'block':'none';
+  if(!has)return;
+  popSel('sot-period',[...new Set(AP.map(r=>r.period))].filter(Boolean).sort());
+  popSel('sot-sub',[...new Set(AP.map(r=>r.sub))]);
+  popSel('sot-dept',[...new Set(AP.map(r=>r.dept))]);
+  popSel('sot-vendor',[...new Set(AP.map(r=>r.vendor))]);
+  popSel('sot-gl',[...new Set(AP.map(r=>r.account))]);
+  popSel('sot-cc',[...new Set(AP.map(r=>r.cc))]);
+  popSel('sot-type',[...new Set(AP.map(r=>r.type))]);
+  const d=getSOTF();const tot=d.reduce((s,r)=>s+r.amount,0);
+  document.getElementById('sot-tot').textContent=fmt(tot);
+  document.getElementById('sot-txns').textContent=d.length.toLocaleString();
+  document.getElementById('sot-vends').textContent=new Set(d.map(r=>r.vendor)).size;
+  document.getElementById('sot-gls').textContent=new Set(d.map(r=>r.account)).size;
+  const shown=d.slice(0,1000);
+  document.getElementById('sot-lbl').textContent=`Showing ${shown.length.toLocaleString()} of ${d.length.toLocaleString()} records`;
+  document.getElementById('sot-tbody').innerHTML=shown.map(r=>`<tr><td>${esc(r.period)}</td><td class="td-m">${esc(r.sub)}</td><td class="td-m">${esc(r.posting)}</td><td style="font-weight:600">${esc(r.vendor)}</td><td><span class="tag tag-gl">${esc(r.account)}</span></td><td class="td-m">${esc(r.dept)}</td><td class="td-m">${esc(r.cc)}</td><td class="td-m">${esc(r.entity)}</td><td class="td-m">${esc(r.sub)}</td><td class="td-m">${esc(r.cls)}</td><td class="td-m">${esc(r.type)}</td><td class="td-m">${esc(r.inv_type)}</td><td class="td-m" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.memo)}">${esc(r.memo)}</td><td class="td-m">${esc(r.coupa)}</td><td class="td-m">${esc(r.budget)}</td><td class="td-r">${fmtF(r.amount)}</td></tr>`).join('');
+}
+
+// ── EXPORTS ───────────────────────────────────────────
+const dlCSV=(rows,fn)=>{const csv=rows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=fn;a.click();};
+function expActuals(){dlCSV([['Period','Subsidiary','Vendor','GL Code','Dept','Cost Center','Entity','Class','Type','Memo','Amount USD']].concat(getAPF().map(r=>[r.period,r.sub,r.vendor,r.account,r.dept,r.cc,r.entity,r.cls,r.type,r.memo,r.amount])),'ap_actuals.csv');}
+function expSOT(){dlCSV([['Period','Subsidiary','Posting Date','Vendor','GL Code','Dept','Cost Center','Entity','Class','Type','Invoice Type','Memo','Coupa PO','Budget ID','Amount USD']].concat(getSOTF().map(r=>[r.period,r.sub,r.posting,r.vendor,r.account,r.dept,r.cc,r.entity,r.cls,r.type,r.inv_type,r.memo,r.coupa,r.budget,r.amount])),'ap_source_of_truth.csv');}
+function expFcst(){const rows=[['GL Code','GL Name','BU','Cost Center','Dept','Vendor FP&A','Forecast','Actuals','Variance $','Variance %','Status','Commentary']];document.querySelectorAll('#fv-tbody tr').forEach(tr=>{const tds=[...tr.querySelectorAll('td')];if(tds.length>=11)rows.push(tds.slice(0,12).map(td=>{const ta=td.querySelector('textarea');return ta?ta.value:td.textContent.trim();}));});dlCSV(rows,'fcst_vs_actuals.csv');}
+function expFuture(){const rows=[[...document.querySelectorAll('#fut-thead th')].map(t=>t.textContent.trim())];document.querySelectorAll('#fut-tbody tr').forEach(tr=>rows.push([...tr.querySelectorAll('td')].map(td=>td.textContent.trim())));dlCSV(rows,'future_forecast.csv');}
+function expAccruals(){const period=selVal('acc-period');const approved=getAccSuggestions(period).filter(s=>ACC_DEC[period+'|||'+s.key]==='approved');dlCSV([['Period','Vendor','GL Code','Dept','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Forecast Remaining','Suggested Accrual','Confidence','Fcst Risk']].concat(approved.map(s=>[period,s.vendor,s.account,s.dept,s.cc,s.curr_month,s.prior_month,s.six_mo_avg,s.fcst_amount!==null?s.fcst_amount:'N/A',s.fcst_amount!==null?Math.max(0,s.fcst_amount-s.curr_month):'N/A',s.suggested_amount,s.confidence,s.fcst_risk])),'accruals_approved_'+period+'.csv');}
+
+// ── NAV ───────────────────────────────────────────────
+const PAGE_CFG={upload:{t:'Upload Data',s:'Load AP Details and Forecast exports from Adaptive / NetSuite'},actuals:{t:'AP Actuals',s:'12-month spend analysis — filter by any dimension'},fcst:{t:'Forecast vs Actuals',s:'Compare actuals against M8 forecast with GL-level variance commentary'},future:{t:'Future Forecast',s:'Upcoming months forecast — identify lines needing updates'},accruals:{t:'Accruals',s:'Month-end accrual recommendations with forecast risk scoring'},approved:{t:'Current Month Accruals',s:'Finalized approved accruals for the current close period — ready for JE posting'},attention:{t:'Needs Attention',s:'Items requiring action — forecast drift, accrual gaps, spend spikes'},sot:{t:'Source of Truth',s:'Complete 12-month AP actuals — single source of truth'}};
+function goTo(page){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  const order=['upload','actuals','fcst','future','accruals','approved','attention','sot'];
+  const navItems=[...document.querySelectorAll('.nav-item')];
+  const idx=order.indexOf(page);if(idx>=0&&navItems[idx])navItems[idx].classList.add('active');
+  const cfg=PAGE_CFG[page]||{};
+  document.getElementById('page-title').textContent=cfg.t||'';
+  document.getElementById('page-sub').textContent=cfg.s||'';
+}
+load();
+</script>
+</body>
+</html>
