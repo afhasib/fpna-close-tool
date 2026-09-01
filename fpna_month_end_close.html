@@ -1544,68 +1544,49 @@ function drillActuals(vendor,gl,dept,period){
   document.getElementById('drill-modal').style.display='block';
 }
 
-function drillForecast(fcstVendor,gl,dept,period){
+function drillForecast(fcstVendor,gl,apDept,period){
+  // Match on vendor + GL + period + cost center (FC cc field matches AP dept field)
   const rows=FC.filter(r=>{
-    const normMatch=normalize(r.vendor_name||'')===normalize(fcstVendor)||r.vendor_name===fcstVendor;
-    return normMatch&&r.gl_code===gl&&r.dept===dept&&r.period===period;
+    const nm=normalize(r.vendor_name||'')===normalize(fcstVendor)||r.vendor_name===fcstVendor||trigramSim(r.vendor_name||'',fcstVendor)>=0.85;
+    const deptMatch=!apDept||r.cc===apDept||r.cc.includes(apDept.match(/^\d+/)?.[0]||'__')||apDept.includes(r.cc_code||'__');
+    return nm&&r.gl_code===gl&&r.period===period&&deptMatch;
   });
-  const total=rows.reduce((s,r)=>s+r.amount,0);
+  // If no dept match found, fall back to all rows for this vendor+GL+period
+  const finalRows=rows.length?rows:FC.filter(r=>{
+    const nm=normalize(r.vendor_name||'')===normalize(fcstVendor)||r.vendor_name===fcstVendor||trigramSim(r.vendor_name||'',fcstVendor)>=0.85;
+    return nm&&r.gl_code===gl&&r.period===period;
+  });
+  const total=finalRows.reduce((s,r)=>s+r.amount,0);
   document.getElementById('drill-icon').textContent='📊';
   document.getElementById('drill-title').textContent=`Adaptive Forecast — ${fcstVendor}`;
-  document.getElementById('drill-sub').textContent=`GL: ${gl} · Dept: ${dept} · Period: ${period}`;
+  document.getElementById('drill-sub').textContent=`GL: ${gl} · Dept/CC: ${apDept} · Period: ${period}${!rows.length?' (showing all depts — CC not matched)':''}`;
   document.getElementById('drill-total').textContent=fmtF(total);
   document.getElementById('drill-total').style.color='var(--blue)';
-  document.getElementById('drill-count').textContent=`${rows.length} forecast row${rows.length!==1?'s':''}`;
-  document.getElementById('drill-thead').innerHTML=`<tr style="text-align:left"><th style="padding:8px 12px">Vendor (FP&A)</th><th style="padding:8px 12px">GL Code</th><th style="padding:8px 12px">GL Name</th><th style="padding:8px 12px">BU</th><th style="padding:8px 12px">Cost Center</th><th style="padding:8px 12px">Department</th><th style="padding:8px 12px">Period</th><th style="padding:8px 12px;text-align:right">Amount</th><th style="padding:8px 12px">Budget ID</th><th style="padding:8px 12px">Comments</th></tr>`;
-  document.getElementById('drill-tbody').innerHTML=rows.map((r,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--surface2)':''}">
-    <td style="padding:7px 12px;font-weight:600">${esc(r.vendor_name)}</td>
-    <td style="padding:7px 12px"><span class="tag tag-gl" style="font-size:10px">${esc(r.gl_code)}</span></td>
-    <td style="padding:7px 12px;color:var(--text3)">${esc(r.gl_name)}</td>
-    <td style="padding:7px 12px;color:var(--text3)">${esc(r.bu)}</td>
-    <td style="padding:7px 12px;color:var(--text3)">${esc(r.cc)}</td>
-    <td style="padding:7px 12px;color:var(--text3)">${esc(r.dept)}</td>
-    <td style="padding:7px 12px">${esc(r.period)}</td>
-    <td style="padding:7px 12px;text-align:right;font-weight:600;color:var(--blue)">${fmtF(r.amount)}</td>
-    <td style="padding:7px 12px;color:var(--text3)">${esc(r.budget)}</td>
-    <td style="padding:7px 12px;color:var(--text3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.comments||'')}</td>
-  </tr>`).join('');
-  if(!rows.length)document.getElementById('drill-tbody').innerHTML=`<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--text3)">No forecast rows found for this combination.</td></tr>`;
+  document.getElementById('drill-count').textContent=`${finalRows.length} forecast row${finalRows.length!==1?'s':''}`;
+  document.getElementById('drill-thead').innerHTML=`<tr style="text-align:left"><th style="padding:8px 12px">Vendor (FP&A)</th><th style="padding:8px 12px">GL Code</th><th style="padding:8px 12px">GL Name</th><th style="padding:8px 12px">BU</th><th style="padding:8px 12px">Cost Center</th><th style="padding:8px 12px">CC Owner</th><th style="padding:8px 12px">Period</th><th style="padding:8px 12px;text-align:right">Amount</th><th style="padding:8px 12px">Budget ID</th><th style="padding:8px 12px">Comments</th></tr>`;
+  document.getElementById('drill-tbody').innerHTML=finalRows.map((r,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--surface2)':''}"><td style="padding:7px 12px;font-weight:600">${esc(r.vendor_name)}</td><td style="padding:7px 12px"><span class="tag tag-gl" style="font-size:10px">${esc(r.gl_code)}</span></td><td style="padding:7px 12px;color:var(--text3)">${esc(r.gl_name)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.bu)}</td><td style="padding:7px 12px;color:var(--text3);font-weight:500">${esc(r.cc)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.dept)}</td><td style="padding:7px 12px">${esc(r.period)}</td><td style="padding:7px 12px;text-align:right;font-weight:600;color:var(--blue)">${fmtF(r.amount)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.budget)}</td><td style="padding:7px 12px;color:var(--text3);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.comments||'')}</td></tr>`).join('')||`<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--text3)">No forecast rows found.</td></tr>`;
   document.getElementById('drill-modal').style.display='block';
 }
 
-function expAttn(){
-  const threshold=parseInt(document.getElementById('attn-threshold')?.value||'10');
-  const items=ATTN_DRIFT_ALL.filter(d=>Math.abs(d.varPct)>=threshold);
-  const rows=[['Vendor','Fcst Vendor','GL Code','GL Name','Department','Cost Center','BU',...(items[0]?.last6AP||[]),'6-Mo Avg Actual',...(items[0]?.futureFCPeriods||[]),'Avg Fcst (6-mo)','Variance $','Variance %','Direction','Explanation']];
-  items.forEach(d=>rows.push([d.vendor,d.fcst_vendor,d.gl,d.gl_name,d.dept,d.cc,d.bu,...d.actAmts,d.actAvg,...d.fcstAmts,d.fcstAvg,d.variance,d.varPct.toFixed(1)+'%',d.isFav?'Favourable':'Unfavourable',d.why]));
-  dlCSV(rows,'forecast_discrepancy_'+new Date().toISOString().slice(0,10)+'.csv');
-}
-
-function drillActualsMulti(vendor,gl,dept,periods){
-  const rows=AP.filter(r=>{const nm=normalize(r.vendor)===normalize(vendor)||r.vendor===vendor;return nm&&r.account===gl&&r.dept===dept&&periods.includes(r.period);});
-  const total=rows.reduce((s,r)=>s+r.amount,0);
-  document.getElementById('drill-icon').textContent='📋';
-  document.getElementById('drill-title').textContent=`AP Detail — ${vendor} (6-month history)`;
-  document.getElementById('drill-sub').textContent=`GL: ${gl} · Dept: ${dept} · Periods: ${periods.join(', ')}`;
-  document.getElementById('drill-total').textContent=fmtF(total/periods.length)+'/mo avg';
-  document.getElementById('drill-total').style.color='var(--text)';
-  document.getElementById('drill-count').textContent=`${rows.length} transactions across ${periods.length} periods`;
-  document.getElementById('drill-thead').innerHTML=`<tr><th style="padding:8px 12px">Period</th><th style="padding:8px 12px">Vendor</th><th style="padding:8px 12px">GL</th><th style="padding:8px 12px">Department</th><th style="padding:8px 12px">CC</th><th style="padding:8px 12px">Type</th><th style="padding:8px 12px;text-align:right">Amount</th><th style="padding:8px 12px">Memo</th></tr>`;
-  document.getElementById('drill-tbody').innerHTML=rows.sort((a,b)=>a.period.localeCompare(b.period)).map((r,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--surface2)':''}"><td style="padding:7px 12px;font-weight:600">${esc(r.period)}</td><td style="padding:7px 12px">${esc(r.vendor)}</td><td style="padding:7px 12px"><span class="tag tag-gl" style="font-size:10px">${esc(r.account)}</span></td><td style="padding:7px 12px;color:var(--text3)">${esc(r.dept)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.cc)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.type)}</td><td style="padding:7px 12px;text-align:right;font-weight:600;color:${r.amount<0?'var(--green)':'var(--text)'}">${fmtF(r.amount)}</td><td style="padding:7px 12px;color:var(--text3);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.memo)}</td></tr>`).join('')||`<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text3)">No transactions found.</td></tr>`;
-  document.getElementById('drill-modal').style.display='block';
-}
-
-function drillForecastMulti(fcstVendor,gl,dept,periods){
-  const rows=FC.filter(r=>{const nm=normalize(r.vendor_name||'')===normalize(fcstVendor)||r.vendor_name===fcstVendor;return nm&&r.gl_code===gl&&r.dept===dept&&periods.includes(r.period);});
-  const total=rows.reduce((s,r)=>s+r.amount,0);
+function drillForecastMulti(fcstVendor,gl,apDept,periods){
+  const rows=FC.filter(r=>{
+    const nm=normalize(r.vendor_name||'')===normalize(fcstVendor)||r.vendor_name===fcstVendor||trigramSim(r.vendor_name||'',fcstVendor)>=0.85;
+    const deptMatch=!apDept||r.cc===apDept||r.cc.includes(apDept.match(/^\d+/)?.[0]||'__')||apDept.includes(r.cc_code||'__');
+    return nm&&r.gl_code===gl&&periods.includes(r.period)&&deptMatch;
+  });
+  const finalRows=rows.length?rows:FC.filter(r=>{
+    const nm=normalize(r.vendor_name||'')===normalize(fcstVendor)||r.vendor_name===fcstVendor||trigramSim(r.vendor_name||'',fcstVendor)>=0.85;
+    return nm&&r.gl_code===gl&&periods.includes(r.period);
+  });
+  const total=finalRows.reduce((s,r)=>s+r.amount,0);
   document.getElementById('drill-icon').textContent='📊';
   document.getElementById('drill-title').textContent=`Adaptive Forecast — ${fcstVendor} (next 6 months)`;
-  document.getElementById('drill-sub').textContent=`GL: ${gl} · Dept: ${dept} · Periods: ${periods.join(', ')}`;
+  document.getElementById('drill-sub').textContent=`GL: ${gl} · Dept/CC: ${apDept} · Periods: ${periods.join(', ')}${!rows.length?' (showing all depts — CC not matched)':''}`;
   document.getElementById('drill-total').textContent=fmtF(total/Math.max(periods.length,1))+'/mo avg';
   document.getElementById('drill-total').style.color='var(--blue)';
-  document.getElementById('drill-count').textContent=`${rows.length} forecast rows across ${periods.length} periods`;
-  document.getElementById('drill-thead').innerHTML=`<tr><th style="padding:8px 12px">Period</th><th style="padding:8px 12px">Vendor (FP&A)</th><th style="padding:8px 12px">GL</th><th style="padding:8px 12px">BU</th><th style="padding:8px 12px">Cost Center</th><th style="padding:8px 12px">Dept</th><th style="padding:8px 12px;text-align:right">Amount</th><th style="padding:8px 12px">Comments</th></tr>`;
-  document.getElementById('drill-tbody').innerHTML=rows.sort((a,b)=>a.period.localeCompare(b.period)).map((r,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--surface2)':''}"><td style="padding:7px 12px;font-weight:600">${esc(r.period)}</td><td style="padding:7px 12px">${esc(r.vendor_name)}</td><td style="padding:7px 12px"><span class="tag tag-gl" style="font-size:10px">${esc(r.gl_code)}</span></td><td style="padding:7px 12px;color:var(--text3)">${esc(r.bu)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.cc)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.dept)}</td><td style="padding:7px 12px;text-align:right;font-weight:600;color:var(--blue)">${fmtF(r.amount)}</td><td style="padding:7px 12px;color:var(--text3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.comments||'')}</td></tr>`).join('')||`<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text3)">No forecast rows found.</td></tr>`;
+  document.getElementById('drill-count').textContent=`${finalRows.length} forecast rows across ${periods.length} periods`;
+  document.getElementById('drill-thead').innerHTML=`<tr><th style="padding:8px 12px">Period</th><th style="padding:8px 12px">Vendor (FP&A)</th><th style="padding:8px 12px">GL</th><th style="padding:8px 12px">BU</th><th style="padding:8px 12px">Cost Center</th><th style="padding:8px 12px">CC Owner</th><th style="padding:8px 12px;text-align:right">Amount</th><th style="padding:8px 12px">Comments</th></tr>`;
+  document.getElementById('drill-tbody').innerHTML=finalRows.sort((a,b)=>a.period.localeCompare(b.period)).map((r,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--surface2)':''}"><td style="padding:7px 12px;font-weight:600">${esc(r.period)}</td><td style="padding:7px 12px">${esc(r.vendor_name)}</td><td style="padding:7px 12px"><span class="tag tag-gl" style="font-size:10px">${esc(r.gl_code)}</span></td><td style="padding:7px 12px;color:var(--text3)">${esc(r.bu)}</td><td style="padding:7px 12px;color:var(--text3);font-weight:500">${esc(r.cc)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.dept)}</td><td style="padding:7px 12px;text-align:right;font-weight:600;color:var(--blue)">${fmtF(r.amount)}</td><td style="padding:7px 12px;color:var(--text3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.comments||'')}</td></tr>`).join('')||`<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text3)">No forecast rows found.</td></tr>`;
   document.getElementById('drill-modal').style.display='block';
 }
 
