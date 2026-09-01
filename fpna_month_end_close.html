@@ -689,10 +689,19 @@ function initMS(id, opts, onchange){
   if(optsChanged){
     list.innerHTML=allOpts.map(o=>`<label class="ms-item"><input type="checkbox" value="${esc(o)}"${MS_STATE[id].has(o)?' checked':''}><span>${esc(o)}</span></label>`).join('');
     list.querySelectorAll('input[type=checkbox]').forEach(cb=>{
-      cb.onchange=()=>{
+      cb.addEventListener('change',()=>{
         if(cb.checked)MS_STATE[id].add(cb.value);else MS_STATE[id].delete(cb.value);
         updateMSBtn(id);onchange();
-      };
+      });
+    });
+  } else {
+    // Re-attach handlers in case they were lost (e.g. after page navigation)
+    list.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+      cb.onchange=null;
+      cb.addEventListener('change',()=>{
+        if(cb.checked)MS_STATE[id].add(cb.value);else MS_STATE[id].delete(cb.value);
+        updateMSBtn(id);onchange();
+      });
     });
   }
   updateMSBtn(id);
@@ -725,12 +734,11 @@ function selectAllMS(id){
   wrap.querySelectorAll('.ms-item').forEach(item=>{
     if(item.style.display==='none')return;
     const cb=item.querySelector('input[type=checkbox]');
-    if(cb){cb.checked=true;MS_STATE[id].add(cb.value);}
+    if(cb&&!cb.checked){cb.checked=true;MS_STATE[id].add(cb.value);}
   });
   updateMSBtn(id);
-  // Trigger the onchange callback stored on the first visible checkbox
   const firstCb=wrap.querySelector('.ms-item:not([style*="none"]) input[type=checkbox]');
-  if(firstCb&&firstCb.onchange)firstCb.onchange();
+  if(firstCb)firstCb.dispatchEvent(new Event('change'));
 }
 
 function clearMS(id){
@@ -738,11 +746,14 @@ function clearMS(id){
   wrap.querySelectorAll('.ms-item').forEach(item=>{
     if(item.style.display==='none')return;
     const cb=item.querySelector('input[type=checkbox]');
-    if(cb){cb.checked=false;if(MS_STATE[id])MS_STATE[id].delete(cb.value);}
+    if(cb&&cb.checked){cb.checked=false;if(MS_STATE[id])MS_STATE[id].delete(cb.value);}
   });
   updateMSBtn(id);
   const firstCb=wrap.querySelector('.ms-item:not([style*="none"]) input[type=checkbox]');
-  if(firstCb&&firstCb.onchange)firstCb.onchange();
+  if(firstCb)firstCb.dispatchEvent(new Event('change'));
+  else{// all hidden, still need to trigger re-render
+    const anyOnchange=wrap._msOnchange;if(anyOnchange)anyOnchange();
+  }
 }
 
 function clearAllMS(prefix){
@@ -1071,7 +1082,15 @@ function buildVendorMatchTable(){
 
 function getFcstForVendor(apVendor,glCode,dept,period){
   const key=apVendor+'||'+glCode+'||'+dept;
-  const match=VENDOR_MATCH_CACHE[key];
+  let match=VENDOR_MATCH_CACHE[key];
+  // Fallback: normalized vendor name lookup (handles CORP./CORP, INC./INC variants)
+  if(!match){
+    const normAP=normalize(apVendor);
+    for(const [k,v] of Object.entries(VENDOR_MATCH_CACHE)){
+      const parts=k.split('||');
+      if(parts[1]===glCode&&parts[2]===dept&&normalize(parts[0])===normAP){match=v;break;}
+    }
+  }
   if(!match)return{amount:null,vendor:null,score:0,fcst_dept:null,gl_mismatch:false,dept_mismatch:false,no_dept_match:false};
   const base={vendor:match.fcst_vendor,score:match.score,fcst_dept:match.fcst_dept,dept_match_score:match.dept_match_score,gl_mismatch:match.gl_mismatch||false,dept_mismatch:match.dept_mismatch||false,no_dept_match:match.no_dept_match||false,ap_gl:match.ap_gl||null,fcst_gl:match.fcst_gl||null,fcst_gl_name:match.fcst_gl_name||null};
   if(match.no_dept_match)return{...base,amount:null}; // vendor found but dept ambiguous — no amount
@@ -1184,11 +1203,11 @@ function getAccSuggestions(targetP){
     const glMismatch=vendorMatch.gl_mismatch||false;const deptMismatch=vendorMatch.dept_mismatch||false;const apGL=vendorMatch.ap_gl||null;const fcstGL=vendorMatch.fcst_gl||null;const fcstGLName=vendorMatch.fcst_gl_name||null;
     let fcstRisk='unknown';
     if(fcstAmt!==null){const d=Math.abs(currAmt-fcstAmt)/Math.max(Math.abs(fcstAmt),1);fcstRisk=d<0.15?'aligned':d<0.4?'minor':'major';}
-    const gap=avg-currAmt;if(gap<250)return; // not enough gap vs history to flag
-    // Suggested accrual: use forecast - actuals when a clean forecast match exists
-    // For GL mismatch or no-forecast cases, fall back to historical avg - actuals
+    const gap=avg-currAmt;if(gap<250)return;
+    // Suggested accrual = forecast - actuals (clean match only)
+    // Fall back to hist avg - actuals when no forecast or coding mismatch
     const suggestedAccrual=(fcstAmt!==null&&!glMismatch&&!deptMismatch)?Math.round(fcstAmt-currAmt):Math.round(gap);
-    // Skip if forecast exists (clean match) and actuals already met or exceeded it
+    // Suppress if actuals already met or exceeded forecast (no accrual needed)
     if(fcstAmt!==null&&!glMismatch&&!deptMismatch&&fcstAmt<=currAmt)return;
     let confidence='low';
     if(fcstRisk==='aligned')confidence='low';else if(freq>=0.83&&Math.abs(avg)>1000)confidence='high';else if(freq>=0.5)confidence='medium';
