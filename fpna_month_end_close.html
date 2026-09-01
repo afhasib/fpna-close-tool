@@ -1460,8 +1460,8 @@ function renderDollarView(threshold,dirFilter){
       ?'<span class="badge b-low" style="background:var(--green-light);color:var(--green);border-color:var(--green-border)">▲ Favourable</span>'
       :'<span class="badge b-high">▼ Unfavourable</span>';
     const mNote=d.glMismatch?'<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border);font-size:9px;margin-left:3px">⚠GL</span>':d.deptMismatch?'<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border);font-size:9px;margin-left:3px">⚠Dept</span>':'';
-    const actCells=d.actAmts.map((v,i)=>`<td class="td-r" style="font-size:10px;color:var(--text3)">${v?fmt(v):'—'}</td>`).join('');
-    const fcstCells=d.fcstAmts.map(v=>`<td class="td-r" style="font-size:10px;color:var(--blue)">${v?fmt(v):'—'}</td>`).join('');
+    const actCells=d.actAmts.map((v,i)=>`<td class="td-r" style="font-size:10px;color:var(--text3);${v?'cursor:pointer;text-decoration:underline dotted;':''}" ${v?`onclick="drillActuals('${esc(d.vendor)}','${esc(d.gl)}','${esc(d.dept)}','${esc(d.last6AP[i])}')" title="Click to see AP transactions"`:''}>${v?fmt(v):'—'}</td>`).join('');
+    const fcstCells=d.fcstAmts.map((v,i)=>`<td class="td-r" style="font-size:10px;color:var(--blue);${v?'cursor:pointer;text-decoration:underline dotted;':''}" ${v?`onclick="drillForecast('${esc(d.fcst_vendor||d.vendor)}','${esc(d.gl)}','${esc(d.dept)}','${esc(d.futureFCPeriods[i])}')" title="Click to see forecast detail"`:''}>${v?fmt(v):'—'}</td>`).join('');
     const varClass=!d.isFav?'var-pos':'var-neg';
     const rowBg=d.glMismatch||d.deptMismatch?'background:var(--yellow-light)':'';
     return`<tr style="${rowBg}">
@@ -1473,9 +1473,9 @@ function renderDollarView(threshold,dirFilter){
       <td style="font-size:10px;color:var(--text3);max-width:80px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.cc)}">${esc(d.cc)}</td>
       <td style="font-size:10px;color:var(--text3)">${esc(d.bu)}</td>
       ${actCells}
-      <td class="td-r" style="font-weight:700;font-size:11px">${fmtF(d.actAvg)}</td>
+      <td class="td-r" style="font-weight:700;font-size:11px;cursor:pointer;text-decoration:underline dotted" onclick="drillActualsMulti('${esc(d.vendor)}','${esc(d.gl)}','${esc(d.dept)}',${JSON.stringify(d.last6AP)})" title="Click to see all AP transactions">${fmtF(d.actAvg)}</td>
       ${fcstCells}
-      <td class="td-r" style="font-weight:700;color:var(--blue);font-size:11px">${fmtF(d.fcstAvg)}</td>
+      <td class="td-r" style="font-weight:700;color:var(--blue);font-size:11px;cursor:pointer;text-decoration:underline dotted" onclick="drillForecastMulti('${esc(d.fcst_vendor||d.vendor)}','${esc(d.gl)}','${esc(d.dept)}',${JSON.stringify(d.futureFCPeriods)})" title="Click to see all forecast rows">${fmtF(d.fcstAvg)}</td>
       <td class="td-r ${varClass}" style="font-weight:700;font-size:11px">${fmtF(d.variance)}</td>
       <td class="td-r ${varClass}" style="font-weight:700;font-size:11px">${fmtP(d.varPct)}</td>
       <td>${dirBadge}</td>
@@ -1511,12 +1511,102 @@ function renderCodingIssues(){
   }).join('');
 }
 
+// ── DRILL-DOWN ────────────────────────────────────────
+function closeDrill(e){if(e.target===document.getElementById('drill-modal'))document.getElementById('drill-modal').style.display='none';}
+
+function drillActuals(vendor,gl,dept,period){
+  const rows=AP.filter(r=>{
+    const normMatch=normalize(r.vendor)===normalize(vendor)||r.vendor===vendor;
+    return normMatch&&r.account===gl&&r.dept===dept&&r.period===period;
+  });
+  const total=rows.reduce((s,r)=>s+r.amount,0);
+  document.getElementById('drill-icon').textContent='📋';
+  document.getElementById('drill-title').textContent=`AP Detail — ${vendor}`;
+  document.getElementById('drill-sub').textContent=`GL: ${gl} · Dept: ${dept} · Period: ${period}`;
+  document.getElementById('drill-total').textContent=fmtF(total);
+  document.getElementById('drill-total').style.color=total<0?'var(--green)':'var(--text)';
+  document.getElementById('drill-count').textContent=`${rows.length} transaction${rows.length!==1?'s':''}`;
+  document.getElementById('drill-thead').innerHTML=`<tr style="text-align:left"><th style="padding:8px 12px">Vendor</th><th style="padding:8px 12px">Subsidiary</th><th style="padding:8px 12px">Period</th><th style="padding:8px 12px">Netsuite Date</th><th style="padding:8px 12px">GL Code</th><th style="padding:8px 12px">Department</th><th style="padding:8px 12px">Cost Center</th><th style="padding:8px 12px">Class</th><th style="padding:8px 12px">Type</th><th style="padding:8px 12px;text-align:right">Amount (Net)</th><th style="padding:8px 12px">Memo</th></tr>`;
+  document.getElementById('drill-tbody').innerHTML=rows.map((r,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--surface2)':''}">
+    <td style="padding:7px 12px;font-weight:600">${esc(r.vendor)}</td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.sub)}</td>
+    <td style="padding:7px 12px">${esc(r.period)}</td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.posting||'')}</td>
+    <td style="padding:7px 12px"><span class="tag tag-gl" style="font-size:10px">${esc(r.account)}</span></td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.dept)}</td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.cc)}</td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.cls)}</td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.type)}</td>
+    <td style="padding:7px 12px;text-align:right;font-weight:600;color:${r.amount<0?'var(--green)':'var(--text)'}">${fmtF(r.amount)}</td>
+    <td style="padding:7px 12px;color:var(--text3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.memo)}">${esc(r.memo)}</td>
+  </tr>`).join('');
+  if(!rows.length)document.getElementById('drill-tbody').innerHTML=`<tr><td colspan="11" style="padding:24px;text-align:center;color:var(--text3)">No transactions found for this combination.</td></tr>`;
+  document.getElementById('drill-modal').style.display='block';
+}
+
+function drillForecast(fcstVendor,gl,dept,period){
+  const rows=FC.filter(r=>{
+    const normMatch=normalize(r.vendor_name||'')===normalize(fcstVendor)||r.vendor_name===fcstVendor;
+    return normMatch&&r.gl_code===gl&&r.dept===dept&&r.period===period;
+  });
+  const total=rows.reduce((s,r)=>s+r.amount,0);
+  document.getElementById('drill-icon').textContent='📊';
+  document.getElementById('drill-title').textContent=`Adaptive Forecast — ${fcstVendor}`;
+  document.getElementById('drill-sub').textContent=`GL: ${gl} · Dept: ${dept} · Period: ${period}`;
+  document.getElementById('drill-total').textContent=fmtF(total);
+  document.getElementById('drill-total').style.color='var(--blue)';
+  document.getElementById('drill-count').textContent=`${rows.length} forecast row${rows.length!==1?'s':''}`;
+  document.getElementById('drill-thead').innerHTML=`<tr style="text-align:left"><th style="padding:8px 12px">Vendor (FP&A)</th><th style="padding:8px 12px">GL Code</th><th style="padding:8px 12px">GL Name</th><th style="padding:8px 12px">BU</th><th style="padding:8px 12px">Cost Center</th><th style="padding:8px 12px">Department</th><th style="padding:8px 12px">Period</th><th style="padding:8px 12px;text-align:right">Amount</th><th style="padding:8px 12px">Budget ID</th><th style="padding:8px 12px">Comments</th></tr>`;
+  document.getElementById('drill-tbody').innerHTML=rows.map((r,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--surface2)':''}">
+    <td style="padding:7px 12px;font-weight:600">${esc(r.vendor_name)}</td>
+    <td style="padding:7px 12px"><span class="tag tag-gl" style="font-size:10px">${esc(r.gl_code)}</span></td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.gl_name)}</td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.bu)}</td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.cc)}</td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.dept)}</td>
+    <td style="padding:7px 12px">${esc(r.period)}</td>
+    <td style="padding:7px 12px;text-align:right;font-weight:600;color:var(--blue)">${fmtF(r.amount)}</td>
+    <td style="padding:7px 12px;color:var(--text3)">${esc(r.budget)}</td>
+    <td style="padding:7px 12px;color:var(--text3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.comments||'')}</td>
+  </tr>`).join('');
+  if(!rows.length)document.getElementById('drill-tbody').innerHTML=`<tr><td colspan="10" style="padding:24px;text-align:center;color:var(--text3)">No forecast rows found for this combination.</td></tr>`;
+  document.getElementById('drill-modal').style.display='block';
+}
+
 function expAttn(){
   const threshold=parseInt(document.getElementById('attn-threshold')?.value||'10');
   const items=ATTN_DRIFT_ALL.filter(d=>Math.abs(d.varPct)>=threshold);
   const rows=[['Vendor','Fcst Vendor','GL Code','GL Name','Department','Cost Center','BU',...(items[0]?.last6AP||[]),'6-Mo Avg Actual',...(items[0]?.futureFCPeriods||[]),'Avg Fcst (6-mo)','Variance $','Variance %','Direction','Explanation']];
   items.forEach(d=>rows.push([d.vendor,d.fcst_vendor,d.gl,d.gl_name,d.dept,d.cc,d.bu,...d.actAmts,d.actAvg,...d.fcstAmts,d.fcstAvg,d.variance,d.varPct.toFixed(1)+'%',d.isFav?'Favourable':'Unfavourable',d.why]));
   dlCSV(rows,'forecast_discrepancy_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function drillActualsMulti(vendor,gl,dept,periods){
+  const rows=AP.filter(r=>{const nm=normalize(r.vendor)===normalize(vendor)||r.vendor===vendor;return nm&&r.account===gl&&r.dept===dept&&periods.includes(r.period);});
+  const total=rows.reduce((s,r)=>s+r.amount,0);
+  document.getElementById('drill-icon').textContent='📋';
+  document.getElementById('drill-title').textContent=`AP Detail — ${vendor} (6-month history)`;
+  document.getElementById('drill-sub').textContent=`GL: ${gl} · Dept: ${dept} · Periods: ${periods.join(', ')}`;
+  document.getElementById('drill-total').textContent=fmtF(total/periods.length)+'/mo avg';
+  document.getElementById('drill-total').style.color='var(--text)';
+  document.getElementById('drill-count').textContent=`${rows.length} transactions across ${periods.length} periods`;
+  document.getElementById('drill-thead').innerHTML=`<tr><th style="padding:8px 12px">Period</th><th style="padding:8px 12px">Vendor</th><th style="padding:8px 12px">GL</th><th style="padding:8px 12px">Department</th><th style="padding:8px 12px">CC</th><th style="padding:8px 12px">Type</th><th style="padding:8px 12px;text-align:right">Amount</th><th style="padding:8px 12px">Memo</th></tr>`;
+  document.getElementById('drill-tbody').innerHTML=rows.sort((a,b)=>a.period.localeCompare(b.period)).map((r,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--surface2)':''}"><td style="padding:7px 12px;font-weight:600">${esc(r.period)}</td><td style="padding:7px 12px">${esc(r.vendor)}</td><td style="padding:7px 12px"><span class="tag tag-gl" style="font-size:10px">${esc(r.account)}</span></td><td style="padding:7px 12px;color:var(--text3)">${esc(r.dept)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.cc)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.type)}</td><td style="padding:7px 12px;text-align:right;font-weight:600;color:${r.amount<0?'var(--green)':'var(--text)'}">${fmtF(r.amount)}</td><td style="padding:7px 12px;color:var(--text3);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.memo)}</td></tr>`).join('')||`<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text3)">No transactions found.</td></tr>`;
+  document.getElementById('drill-modal').style.display='block';
+}
+
+function drillForecastMulti(fcstVendor,gl,dept,periods){
+  const rows=FC.filter(r=>{const nm=normalize(r.vendor_name||'')===normalize(fcstVendor)||r.vendor_name===fcstVendor;return nm&&r.gl_code===gl&&r.dept===dept&&periods.includes(r.period);});
+  const total=rows.reduce((s,r)=>s+r.amount,0);
+  document.getElementById('drill-icon').textContent='📊';
+  document.getElementById('drill-title').textContent=`Adaptive Forecast — ${fcstVendor} (next 6 months)`;
+  document.getElementById('drill-sub').textContent=`GL: ${gl} · Dept: ${dept} · Periods: ${periods.join(', ')}`;
+  document.getElementById('drill-total').textContent=fmtF(total/Math.max(periods.length,1))+'/mo avg';
+  document.getElementById('drill-total').style.color='var(--blue)';
+  document.getElementById('drill-count').textContent=`${rows.length} forecast rows across ${periods.length} periods`;
+  document.getElementById('drill-thead').innerHTML=`<tr><th style="padding:8px 12px">Period</th><th style="padding:8px 12px">Vendor (FP&A)</th><th style="padding:8px 12px">GL</th><th style="padding:8px 12px">BU</th><th style="padding:8px 12px">Cost Center</th><th style="padding:8px 12px">Dept</th><th style="padding:8px 12px;text-align:right">Amount</th><th style="padding:8px 12px">Comments</th></tr>`;
+  document.getElementById('drill-tbody').innerHTML=rows.sort((a,b)=>a.period.localeCompare(b.period)).map((r,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--surface2)':''}"><td style="padding:7px 12px;font-weight:600">${esc(r.period)}</td><td style="padding:7px 12px">${esc(r.vendor_name)}</td><td style="padding:7px 12px"><span class="tag tag-gl" style="font-size:10px">${esc(r.gl_code)}</span></td><td style="padding:7px 12px;color:var(--text3)">${esc(r.bu)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.cc)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.dept)}</td><td style="padding:7px 12px;text-align:right;font-weight:600;color:var(--blue)">${fmtF(r.amount)}</td><td style="padding:7px 12px;color:var(--text3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.comments||'')}</td></tr>`).join('')||`<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text3)">No forecast rows found.</td></tr>`;
+  document.getElementById('drill-modal').style.display='block';
 }
 
 function expCoding(){
@@ -1648,5 +1738,28 @@ function goTo(page){
 }
 load();
 </script>
+<!-- DRILL-DOWN MODAL -->
+<div id="drill-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);backdrop-filter:blur(2px)" onclick="closeDrill(event)">
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface);border-radius:var(--r);box-shadow:0 8px 40px rgba(0,0,0,0.2);width:90vw;max-width:1100px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0">
+      <div id="drill-icon" style="font-size:20px"></div>
+      <div>
+        <div id="drill-title" style="font-weight:700;font-size:15px;color:var(--text)"></div>
+        <div id="drill-sub" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
+      </div>
+      <button onclick="document.getElementById('drill-modal').style.display='none'" style="margin-left:auto;border:none;background:none;font-size:20px;cursor:pointer;color:var(--text3);padding:4px 8px">✕</button>
+    </div>
+    <div style="padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:16px;align-items:center">
+      <div id="drill-total" style="font-size:22px;font-weight:700"></div>
+      <div id="drill-count" style="font-size:12px;color:var(--text3)"></div>
+    </div>
+    <div style="overflow:auto;flex:1;padding:0">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead id="drill-thead" style="position:sticky;top:0;background:var(--surface2);z-index:1"></thead>
+        <tbody id="drill-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 </body>
 </html>
