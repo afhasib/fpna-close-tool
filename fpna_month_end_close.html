@@ -1149,14 +1149,34 @@ function getAccSuggestions(targetP){
   const idx=allP.indexOf(targetP);if(idx<2)return[];
   const priorP=allP[idx-1];const lb=allP.slice(Math.max(0,idx-6),idx);
   const combos={};
-  AP.filter(r=>lb.includes(r.period)).forEach(r=>{const k=r.vendor+'|||'+r.account+'|||'+r.dept;if(!combos[k])combos[k]={vendor:r.vendor,account:r.account,dept:r.dept,cc:r.cc,amts:{},priorAmt:0};combos[k].amts[r.period]=(combos[k].amts[r.period]||0)+r.amount;});
-  AP.filter(r=>r.period===priorP).forEach(r=>{const k=r.vendor+'|||'+r.account+'|||'+r.dept;if(combos[k])combos[k].priorAmt+=r.amount;});
-  const currActuals={};AP.filter(r=>r.period===targetP).forEach(r=>{const k=r.vendor+'|||'+r.account+'|||'+r.dept;currActuals[k]=(currActuals[k]||0)+r.amount;});
+  // Normalize vendor name for grouping — strips LLC/INC/CORP etc so variants map to same key
+  const normVendor=v=>v.toUpperCase().replace(/\b(LLC|INC|CORP|LTD|CO|COMPANY|GROUP|THE|AND|PRIVATE|PVT|LIMITED|L\.L\.C|INC\.|CORP\.)\b/g,'').replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
+
+  AP.filter(r=>lb.includes(r.period)).forEach(r=>{
+    const k=normVendor(r.vendor)+'|||'+r.account+'|||'+r.dept;
+    if(!combos[k])combos[k]={vendor:r.vendor,account:r.account,dept:r.dept,cc:r.cc,amts:{},priorAmt:0,vendorNames:new Set()};
+    combos[k].amts[r.period]=(combos[k].amts[r.period]||0)+r.amount;
+    combos[k].vendorNames.add(r.vendor);
+  });
+  AP.filter(r=>r.period===priorP).forEach(r=>{
+    const k=normVendor(r.vendor)+'|||'+r.account+'|||'+r.dept;
+    if(combos[k])combos[k].priorAmt+=r.amount;
+  });
+  const currActuals={};AP.filter(r=>r.period===targetP).forEach(r=>{
+    const k=normVendor(r.vendor)+'|||'+r.account+'|||'+r.dept;
+    currActuals[k]=(currActuals[k]||0)+r.amount;
+    // Track current period vendor name separately
+    if(!currActuals[k+'__name'])currActuals[k+'__name']=r.vendor;
+  });
   const suggestions=[];
   Object.entries(combos).forEach(([key,combo])=>{
     const n=Object.keys(combo.amts).length;const avg=Object.values(combo.amts).reduce((s,v)=>s+v,0)/n;const freq=n/lb.length;
     if(avg<250||freq<0.33)return;
     const currAmt=currActuals[key]||0;const priorAmt=combo.priorAmt;
+    // Detect vendor name change (e.g. LLC → INC)
+    const currName=currActuals[key+'__name']||combo.vendor;
+    const nameChanged=currName&&currName!==combo.vendor&&normVendor(currName)===normVendor(combo.vendor);
+    const histNames=[...combo.vendorNames].join(' / ');
     // Fuzzy vendor match: try vendor-level first (90%+ name similarity + same GL)
     const vendorMatch=getFcstForVendor(combo.vendor,combo.account,combo.dept,targetP);
     const fcstAmt=vendorMatch.amount!==null?vendorMatch.amount:null;
@@ -1172,7 +1192,7 @@ function getAccSuggestions(targetP){
     if(fcstAmt!==null&&!glMismatch&&!deptMismatch&&fcstAmt<=currAmt)return;
     let confidence='low';
     if(fcstRisk==='aligned')confidence='low';else if(freq>=0.83&&Math.abs(avg)>1000)confidence='high';else if(freq>=0.5)confidence='medium';
-    suggestions.push({key,vendor:combo.vendor,account:combo.account,dept:combo.dept,cc:combo.cc,suggested_amount:suggestedAccrual,curr_month:currAmt,prior_month:priorAmt,six_mo_avg:Math.round(avg),frequency:freq,periods_seen:n,lookback_count:lb.length,confidence,fcst_risk:fcstRisk,fcst_amount:fcstAmt,fcst_vendor:fcstVendorName,fcst_match_score:fcstMatchScore,fcst_dept:vendorMatch.fcst_dept||null,fcst_dept_score:fcstDeptScore,gl_mismatch:glMismatch,dept_mismatch:deptMismatch,ap_gl:apGL,fcst_gl:fcstGL,fcst_gl_name:fcstGLName});
+    suggestions.push({key,vendor:combo.vendor,currVendorName:currName,nameChanged,histNames,account:combo.account,dept:combo.dept,cc:combo.cc,suggested_amount:suggestedAccrual,curr_month:currAmt,prior_month:priorAmt,six_mo_avg:Math.round(avg),frequency:freq,periods_seen:n,lookback_count:lb.length,confidence,fcst_risk:fcstRisk,fcst_amount:fcstAmt,fcst_vendor:fcstVendorName,fcst_match_score:fcstMatchScore,fcst_dept:vendorMatch.fcst_dept||null,fcst_dept_score:fcstDeptScore,gl_mismatch:glMismatch,dept_mismatch:deptMismatch,ap_gl:apGL,fcst_gl:fcstGL,fcst_gl_name:fcstGLName});
   });
   const ord={high:0,medium:1,low:2};
   return suggestions.sort((a,b)=>ord[a.confidence]-ord[b.confidence]||b.suggested_amount-a.suggested_amount);
@@ -1210,7 +1230,9 @@ function renderAccruals(){
     const fb=s.fcst_risk==='aligned'?'<span class="badge b-low">Fcst Aligned</span>':s.fcst_risk==='minor'?'<span class="badge b-med">Minor Fcst Gap</span>':s.fcst_risk==='major'?'<span class="badge b-high">Fcst Misaligned</span>':'<span class="badge b-none">No Fcst</span>';
     return`<div class="acc-card ${dec||''}" style="${s.gl_mismatch||s.dept_mismatch?'border:2px solid var(--yellow-border) !important;background:var(--yellow-light) !important;':''}">
       <div class="acc-top"><div class="acc-info">
-      <div class="acc-vendor">${esc(s.vendor)} <span class="tag tag-gl">${esc(s.account)}</span></div>
+      <div class="acc-vendor">${esc(s.vendor)} <span class="tag tag-gl">${esc(s.account)}</span>${s.nameChanged?`<span class="badge" style="background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border);margin-left:6px">⚠ Name Changed</span>`:''}
+      </div>
+      ${s.nameChanged?`<div style="font-size:11px;color:var(--yellow);margin-bottom:4px;font-weight:500">⚠ Vendor name changed: historical name "<strong>${esc(s.histNames)}</strong>" → current period name "<strong>${esc(s.currVendorName)}</strong>". Same vendor — actuals combined. Verify in NetSuite.</div>`:''}
       <div class="acc-meta"><span class="badge ${bc}">${s.confidence} risk</span>${fb}${s.gl_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL Mismatch — Review Coding</span>`:s.dept_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept Mismatch — Review Coding</span>`:''}<span>Dept: ${esc(s.dept)||'—'}</span><span>${s.periods_seen}/${s.lookback_count} months (${Math.round(s.frequency*100)}%)</span>${s.cc?`<span>CC: ${esc(s.cc)}</span>`:''}</div>
       <div class="acc-amounts" style="grid-template-columns:repeat(5,1fr)">
         <div class="acc-amt-cell"><div class="acc-amt-label">Current Month</div><div class="acc-amt-val ${s.curr_month>0&&s.curr_month<s.six_mo_avg*0.5?'highlight':''}">${fmtF(s.curr_month)}</div></div>
@@ -1286,9 +1308,12 @@ function renderAttention(){
   const dirFilter=document.getElementById('attn-direction')?.value||'';
 
   // Build vendor actuals (last 6 months)
+  // Normalize vendor for grouping across name variants (LLC/INC etc)
+  const normV=v=>v.toUpperCase().replace(/\b(LLC|INC|CORP|LTD|CO|COMPANY|GROUP|THE|AND|PRIVATE|PVT|LIMITED|L\.L\.C|INC\.|CORP\.)\b/g,'').replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
+
   const vendorActuals={};
   AP.filter(r=>last6AP.includes(r.period)).forEach(r=>{
-    const k=r.vendor+'|||'+r.account+'|||'+r.dept;
+    const k=normV(r.vendor)+'|||'+r.account+'|||'+r.dept;
     if(!vendorActuals[k])vendorActuals[k]={vendor:r.vendor,gl:r.account,dept:r.dept,cc:r.cc,cls:r.cls,periods:{}};
     vendorActuals[k].periods[r.period]=(vendorActuals[k].periods[r.period]||0)+r.amount;
   });
