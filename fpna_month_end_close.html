@@ -1402,11 +1402,12 @@ function _renderAttentionNow(){
   document.getElementById('attn-content').style.display=has?'block':'none';
   if(!has)return;
 
-  // Only populate filter options once (initMS skips rebuild if options unchanged)
-  initMS('ms-attn-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean),renderAttention);
-  initMS('ms-attn-dept',[...new Set(AP.map(r=>r.dept))].filter(Boolean),renderAttention);
-  initMS('ms-attn-gl',[...new Set(AP.map(r=>r.account))].filter(Boolean),renderAttention);
-  initMS('ms-attn-bu',[...new Set(FC.map(r=>r.bu))].filter(Boolean),renderAttention);
+  // Populate filters from actual drift data so vendor names match exactly
+  const attnVendors=[...new Set(ATTN_DRIFT_ALL.map(d=>d.vendor))].filter(Boolean).sort();
+  initMS('ms-attn-vendor',attnVendors.length?attnVendors:[...new Set(AP.map(r=>r.vendor))].filter(Boolean),_renderAttentionNow);
+  initMS('ms-attn-dept',[...new Set(AP.map(r=>r.dept))].filter(Boolean),_renderAttentionNow);
+  initMS('ms-attn-gl',[...new Set(AP.map(r=>r.account))].filter(Boolean),_renderAttentionNow);
+  initMS('ms-attn-bu',[...new Set(FC.map(r=>r.bu))].filter(Boolean),_renderAttentionNow);
   initMS('ms-coding-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean),renderCodingIssues);
 
   const threshold=parseInt(document.getElementById('attn-threshold')?.value||'10');
@@ -1441,7 +1442,7 @@ function renderDollarView(threshold,dirFilter){
   let items=ATTN_DRIFT_ALL.filter(d=>Math.abs(d.varPct)>=threshold);
   if(dirFilter==='unfav')items=items.filter(d=>!d.isFav);
   if(dirFilter==='fav')items=items.filter(d=>d.isFav);
-  if(vendorF)items=items.filter(d=>vendorF.includes(d.vendor));
+  if(vendorF)items=items.filter(d=>vendorF.some(v=>normalize(v)===normalize(d.vendor)||v===d.vendor));
   if(deptF)items=items.filter(d=>deptF.includes(d.dept));
   if(glF)items=items.filter(d=>glF.includes(d.gl));
   items.sort((a,b)=>ATTN_SORT.dir*(Math.abs(b[ATTN_SORT.col]||0)-Math.abs(a[ATTN_SORT.col]||0)));
