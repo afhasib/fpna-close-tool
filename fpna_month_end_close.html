@@ -641,6 +641,7 @@ async function load(){
     }catch(e){console.warn('IndexedDB load failed:',e);}
   }
   buildVendorMatchTable();
+  buildAttnData();
   refreshAll();
 }
 
@@ -853,6 +854,7 @@ function handleAP(event){
       showFB('ap-fb',`Saving ${parsed.length.toLocaleString()} records…`,'info');
       await save();
       buildVendorMatchTable();
+      buildAttnData();
       refreshAll();
       showFB('ap-fb',`✓ Loaded ${parsed.length.toLocaleString()} records across ${newP.length} period(s): ${newP.join(', ')} — amounts shown as net (positives = expense, negatives = reversals/credits)`,'ok');
     }catch(err){
@@ -888,6 +890,7 @@ function handleFcst(event){
       LOG.unshift({type:'Forecast (M8)',file:file.name,date:new Date().toLocaleDateString(),records:parsed.length,periods:FC_PERIODS.slice(0,3).join(', ')+'…'});
       await save();
       buildVendorMatchTable();
+      buildAttnData();
       refreshAll();
       showFB('fc-fb',`✓ Loaded ${parsed.length.toLocaleString()} forecast rows across ${FC_PERIODS.length} months.`,'ok');
     }catch(err){showFB('fc-fb','Error: '+err.message,'warn');}
@@ -1306,28 +1309,17 @@ function switchAttnTab(tab){
   if(!isDollar)renderCodingIssues();
 }
 
-function renderAttention(){
-  const has=AP.length>0&&FC.length>0;
-  document.getElementById('attn-empty').style.display=has?'none':'block';
-  document.getElementById('attn-content').style.display=has?'block':'none';
-  if(!has)return;
+function buildAttnData(){
+  // Heavy computation — runs ONCE when data loads, not on every filter change
+  ATTN_DRIFT_ALL=[];
+  ATTN_CODING_ALL=[];
+  if(!AP.length||!FC.length)return;
 
   const apPeriods=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
   const last6AP=apPeriods.slice(-6);
   const latestAP=apPeriods[apPeriods.length-1];
   const futureFCPeriods=FC_PERIODS.filter(p=>p>latestAP).sort().slice(0,6);
 
-  initMS('ms-attn-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean),renderAttention);
-  initMS('ms-attn-dept',[...new Set(AP.map(r=>r.dept))].filter(Boolean),renderAttention);
-  initMS('ms-attn-gl',[...new Set(AP.map(r=>r.account))].filter(Boolean),renderAttention);
-  initMS('ms-attn-bu',[...new Set(FC.map(r=>r.bu))].filter(Boolean),renderAttention);
-  initMS('ms-coding-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean),renderCodingIssues);
-
-  const threshold=parseInt(document.getElementById('attn-threshold')?.value||'10');
-  const dirFilter=document.getElementById('attn-direction')?.value||'';
-
-  // Build vendor actuals (last 6 months)
-  // Normalize vendor for grouping across name variants (LLC/INC etc)
   const normV=v=>v.toUpperCase().replace(/\b(LLC|INC|CORP|LTD|CO|COMPANY|GROUP|THE|AND|PRIVATE|PVT|LIMITED|L\.L\.C|INC\.|CORP\.)\b/g,'').replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
 
   const vendorActuals={};
@@ -1336,9 +1328,6 @@ function renderAttention(){
     if(!vendorActuals[k])vendorActuals[k]={vendor:r.vendor,gl:r.account,dept:r.dept,cc:r.cc,cls:r.cls,periods:{}};
     vendorActuals[k].periods[r.period]=(vendorActuals[k].periods[r.period]||0)+r.amount;
   });
-
-  ATTN_DRIFT_ALL=[];
-  ATTN_CODING_ALL=[];
 
   Object.values(vendorActuals).forEach(va=>{
     const actAmts=last6AP.map(p=>va.periods[p]||0);
@@ -1349,14 +1338,11 @@ function renderAttention(){
     const fcMatch=VENDOR_MATCH_CACHE[matchKey];
 
     if(!fcMatch){
-      // Check if vendor exists in forecast for this GL under a different dept
       const vendorInFcstSameGL=Object.values(VENDOR_MATCH_CACHE).find(m=>trigramSim(va.vendor,m.fcst_vendor||'')>=0.85&&m.gl_code===va.gl);
       if(vendorInFcstSameGL){ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:vendorInFcstSameGL.fcst_vendor,score:trigramSim(va.vendor,vendorInFcstSameGL.fcst_vendor||''),issue:'Missing Forecast — Wrong Dept',ap_gl:va.gl,fcst_gl:vendorInFcstSameGL.gl_code,ap_dept:va.dept,fcst_dept:vendorInFcstSameGL.fcst_dept||'—',rec:`AP has spend for "${va.vendor}" in dept "${va.dept}" but Adaptive forecast only has this vendor under "${vendorInFcstSameGL.fcst_dept}". Either the AP transaction is miscoded or the forecast needs a new line for dept "${va.dept}".`});}
-      // Cross-GL mismatch detection
       let bestScore=0,bestMatch=null;
       Object.values(VENDOR_MATCH_CACHE).forEach(m=>{const s=trigramSim(va.vendor,m.fcst_vendor||'');if(s>bestScore&&s>=0.85&&m.gl_code!==va.gl){bestScore=s;bestMatch=m;}});
       if(bestMatch){ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:bestMatch.fcst_vendor,score:bestScore,issue:'GL Mismatch (unmatched)',ap_gl:va.gl,fcst_gl:bestMatch.gl_code,ap_dept:va.dept,fcst_dept:bestMatch.fcst_dept||'—',rec:`Vendor found in Adaptive under GL "${bestMatch.gl_code}" but AP uses "${va.gl}". Align GL coding in NetSuite or Adaptive.`});}
-      // Rule: 3+ months actuals, zero future forecast — flag in BOTH views
       const activeMonths=actAmts.filter(v=>v>0).length;
       if(activeMonths>=3&&actAvg>100){
         const glName=(FC.find(r=>r.gl_code===va.gl)||{}).gl_name||va.gl;
@@ -1366,40 +1352,51 @@ function renderAttention(){
       return;
     }
 
-    // Flag coding issues
     if(fcMatch.gl_mismatch){
       ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,score:fcMatch.score,issue:'GL Mismatch',ap_gl:va.gl,fcst_gl:fcMatch.gl_code,ap_dept:va.dept,fcst_dept:fcMatch.fcst_dept||'—',rec:`AP uses GL "${va.gl}", Adaptive forecast uses "${fcMatch.gl_code}". Verify which is correct and align both systems.`});
     } else if(fcMatch.dept_mismatch&&fcMatch.no_dept_match){
-      // Vendor found in forecast under multiple depts — add to coding issues but skip dollar analysis
       ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,score:fcMatch.score,issue:'Dept Ambiguous (Multiple Rows)',ap_gl:va.gl,fcst_gl:fcMatch.gl_code,ap_dept:va.dept,fcst_dept:'Multiple depts in forecast',rec:`${va.vendor} appears in Adaptive forecast under multiple departments for GL ${va.gl}. AP dept is "${va.dept}". Align cost center coding so each dept row can be uniquely matched.`});
-      return; // skip dollar comparison — can't show meaningful variance
+      return;
     } else if(fcMatch.dept_mismatch){
       ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,score:fcMatch.score,issue:'Dept / CC Mismatch',ap_gl:va.gl,fcst_gl:fcMatch.gl_code,ap_dept:va.dept,fcst_dept:fcMatch.fcst_dept||'—',rec:`AP department "${va.dept}" does not align with Adaptive cost center "${fcMatch.fcst_dept}". Update cost center in NetSuite or department mapping in Adaptive.`});
     }
 
-    // Dollar variance comparison
     const fcstAmts=futureFCPeriods.map(p=>(fcMatch.periods||{})[p]||0);
     const fcstAvg=fcstAmts.reduce((s,v)=>s+v,0)/Math.max(futureFCPeriods.length,1);
     if(fcstAvg===0&&actAvg===0)return;
     const variance=fcstAvg-actAvg;
     const varPct=actAvg!==0?(variance/Math.abs(actAvg)*100):(fcstAvg!==0?100:0);
-    if(Math.abs(varPct)<1)return; // store all, filter later by threshold
-
+    if(Math.abs(varPct)<1)return;
     const isFav=variance>0;
     const glName=(FC.find(r=>r.gl_code===va.gl)||{}).gl_name||va.gl;
     const bu=fcMatch.bu||va.cls||'';
     const why=!isFav
       ?`Actuals avg ${fmtF(actAvg)}/mo is ${Math.abs(varPct).toFixed(0)}% above forecast avg ${fmtF(fcstAvg)}/mo. Forecast may be understated — consider increasing to reflect actual spend run rate.`
       :`Forecast avg ${fmtF(fcstAvg)}/mo is ${Math.abs(varPct).toFixed(0)}% above actuals avg ${fmtF(actAvg)}/mo. If spend is declining, reduce forecast. If ramp is planned, no change needed.`;
-
     ATTN_DRIFT_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,match_score:fcMatch.score,gl:va.gl,gl_name:glName,dept:va.dept,cc:va.cc,bu,actAmts,actAvg,fcstAmts,fcstAvg,variance,varPct,isFav,glMismatch:fcMatch.gl_mismatch,deptMismatch:fcMatch.dept_mismatch,why,last6AP,futureFCPeriods});
   });
 
-  // Deduplicate coding issues
   const seen=new Set();
   ATTN_CODING_ALL=ATTN_CODING_ALL.filter(i=>{const k=i.vendor+'||'+i.issue+'||'+i.ap_gl;if(seen.has(k))return false;seen.add(k);return true;});
+}
 
-  // Update badge
+function renderAttention(){
+  // Lightweight — just populates filters and calls renderDollarView/renderCodingIssues
+  const has=AP.length>0&&FC.length>0;
+  document.getElementById('attn-empty').style.display=has?'none':'block';
+  document.getElementById('attn-content').style.display=has?'block':'none';
+  if(!has)return;
+
+  // Only populate filter options once (initMS skips rebuild if options unchanged)
+  initMS('ms-attn-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean),renderAttention);
+  initMS('ms-attn-dept',[...new Set(AP.map(r=>r.dept))].filter(Boolean),renderAttention);
+  initMS('ms-attn-gl',[...new Set(AP.map(r=>r.account))].filter(Boolean),renderAttention);
+  initMS('ms-attn-bu',[...new Set(FC.map(r=>r.bu))].filter(Boolean),renderAttention);
+  initMS('ms-coding-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean),renderCodingIssues);
+
+  const threshold=parseInt(document.getElementById('attn-threshold')?.value||'10');
+  const dirFilter=document.getElementById('attn-direction')?.value||'';
+
   const tot=ATTN_DRIFT_ALL.filter(d=>Math.abs(d.varPct)>=threshold).length+ATTN_CODING_ALL.length;
   const badge=document.getElementById('badge-attn');
   if(tot>0){badge.style.display='inline';badge.textContent=tot;}else badge.style.display='none';
