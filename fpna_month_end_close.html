@@ -1356,12 +1356,22 @@ function buildAttnData(){
       ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,score:fcMatch.score,issue:'GL Mismatch',ap_gl:va.gl,fcst_gl:fcMatch.gl_code,ap_dept:va.dept,fcst_dept:fcMatch.fcst_dept||'—',rec:`AP uses GL "${va.gl}", Adaptive forecast uses "${fcMatch.gl_code}". Verify which is correct and align both systems.`});
     } else if(fcMatch.dept_mismatch&&fcMatch.no_dept_match){
       ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,score:fcMatch.score,issue:'Dept Ambiguous (Multiple Rows)',ap_gl:va.gl,fcst_gl:fcMatch.gl_code,ap_dept:va.dept,fcst_dept:'Multiple depts in forecast',rec:`${va.vendor} appears in Adaptive forecast under multiple departments for GL ${va.gl}. AP dept is "${va.dept}". Align cost center coding so each dept row can be uniquely matched.`});
-      return;
+      // Don't return — still show in dollar view, just without a matched forecast amount
     } else if(fcMatch.dept_mismatch){
       ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,score:fcMatch.score,issue:'Dept / CC Mismatch',ap_gl:va.gl,fcst_gl:fcMatch.gl_code,ap_dept:va.dept,fcst_dept:fcMatch.fcst_dept||'—',rec:`AP department "${va.dept}" does not align with Adaptive cost center "${fcMatch.fcst_dept}". Update cost center in NetSuite or department mapping in Adaptive.`});
     }
 
-    const fcstAmts=futureFCPeriods.map(p=>(fcMatch.periods||{})[p]||0);
+    // Dollar variance — use matched periods, or fall back to total GL forecast if dept ambiguous
+    let fcstPeriods=fcMatch.periods||{};
+    if(fcMatch.no_dept_match){
+      // Sum all FC rows for this vendor+GL across all depts
+      const allFCRows=FC.filter(r=>r.gl_code===va.gl&&trigramSim(r.vendor_name||'',va.vendor)>=0.8);
+      futureFCPeriods.forEach(p=>{
+        const tot=allFCRows.filter(r=>r.period===p).reduce((s,r)=>s+r.amount,0);
+        if(tot)fcstPeriods={...fcstPeriods,[p]:tot};
+      });
+    }
+    const fcstAmts=futureFCPeriods.map(p=>(fcstPeriods)[p]||0);
     const fcstAvg=fcstAmts.reduce((s,v)=>s+v,0)/Math.max(futureFCPeriods.length,1);
     if(fcstAvg===0&&actAvg===0)return;
     const variance=fcstAvg-actAvg;
