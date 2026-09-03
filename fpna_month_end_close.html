@@ -1386,8 +1386,10 @@ function buildAttnData(){
     ATTN_DRIFT_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,match_score:fcMatch.score,gl:va.gl,gl_name:glName,dept:va.dept,cc:va.cc,bu,actAmts,actAvg,fcstAmts,fcstAvg,variance,varPct,isFav,glMismatch:fcMatch.gl_mismatch,deptMismatch:fcMatch.dept_mismatch,why,last6AP,futureFCPeriods});
   });
 
-  const seen=new Set();
-  ATTN_CODING_ALL=ATTN_CODING_ALL.filter(i=>{const k=i.vendor+'||'+i.issue+'||'+i.ap_gl;if(seen.has(k))return false;seen.add(k);return true;});
+  // Debug: log summary
+  console.log(`buildAttnData: ${ATTN_DRIFT_ALL.length} drift items, ${ATTN_CODING_ALL.length} coding issues`);
+  const aonItems=ATTN_DRIFT_ALL.filter(d=>d.vendor.toUpperCase().includes('AON'));
+  console.log('AON items in ATTN_DRIFT_ALL:', aonItems.map(d=>({vendor:d.vendor,varPct:d.varPct,dept:d.dept})));
 }
 
 let _attnDebounce=null;
@@ -1438,6 +1440,7 @@ function renderDollarView(threshold,dirFilter){
   dirFilter=dirFilter||document.getElementById('attn-direction')?.value||'';
 
   const vendorF=getMS('ms-attn-vendor'),deptF=getMS('ms-attn-dept'),glF=getMS('ms-attn-gl');
+  console.log('renderDollarView: vendorF=',vendorF,'ATTN_DRIFT_ALL length=',ATTN_DRIFT_ALL.length,'threshold=',threshold);
 
   let items=ATTN_DRIFT_ALL.filter(d=>Math.abs(d.varPct)>=threshold);
   if(dirFilter==='unfav')items=items.filter(d=>!d.isFav);
