@@ -424,10 +424,10 @@
               <table style="font-size:11px">
                 <thead><tr>
                   <th style="min-width:140px">Vendor (AP)</th><th style="min-width:120px">Matched Fcst Vendor</th><th>GL Code</th><th style="max-width:120px">GL Name</th><th style="max-width:100px">Department</th><th style="max-width:80px">CC</th><th style="max-width:60px">BU</th>
-                  <th class="td-r" style="color:var(--text3);min-width:72px">Act M-6</th><th class="td-r" style="color:var(--text3);min-width:72px">Act M-5</th><th class="td-r" style="color:var(--text3);min-width:72px">Act M-4</th><th class="td-r" style="color:var(--text3);min-width:72px">Act M-3</th><th class="td-r" style="color:var(--text3);min-width:72px">Act M-2</th><th class="td-r" style="color:var(--text3);min-width:72px">Act M-1</th>
-                  <th class="td-r" style="min-width:80px;font-weight:700;cursor:pointer" onclick="sortAttn('actAvg')">6-Mo Avg Act <span id="si-actAvg" style="font-size:10px">⇅</span></th>
-                  <th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+1</th><th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+2</th><th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+3</th><th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+4</th><th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+5</th><th class="td-r" style="color:var(--blue);min-width:72px">Fcst M+6</th>
-                  <th class="td-r" style="color:var(--blue);min-width:80px;font-weight:700;cursor:pointer" onclick="sortAttn('fcstAvg')">Avg Fcst <span id="si-fcstAvg" style="font-size:10px">⇅</span></th>
+                  <th class="td-r" style="color:var(--text3);min-width:68px">Act M-12</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-11</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-10</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-9</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-8</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-7</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-6</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-5</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-4</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-3</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-2</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-1</th>
+                  <th class="td-r" style="min-width:85px;font-weight:700;cursor:pointer" onclick="sortAttn('actAvg')">12-Mo Avg Act <span id="si-actAvg" style="font-size:10px">⇅</span></th>
+                  <th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+1</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+2</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+3</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+4</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+5</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+6</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+7</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+8</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+9</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+10</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+11</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+12</th>
+                  <th class="td-r" style="color:var(--blue);min-width:85px;font-weight:700;cursor:pointer" onclick="sortAttn('fcstAvg')">Avg Fcst <span id="si-fcstAvg" style="font-size:10px">⇅</span></th>
                   <th class="td-r" style="min-width:80px;cursor:pointer" onclick="sortAttn('variance')">Variance $ <span id="si-variance" style="font-size:10px">⇅</span></th>
                   <th class="td-r" style="min-width:70px;cursor:pointer" onclick="sortAttn('varPct')">Variance % <span id="si-varPct" style="font-size:10px">▼</span></th>
                   <th style="min-width:90px">Direction</th><th style="min-width:160px">Explanation</th>
@@ -1312,27 +1312,30 @@ function buildAttnData(){
   if(!AP.length||!FC.length)return;
 
   const apPeriods=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
-  const last6AP=apPeriods.slice(-6);
+  // Use 12 months of actuals to smooth out annual/quarterly contracts
+  const last12AP=apPeriods.slice(-12);
   const latestAP=apPeriods[apPeriods.length-1];
-  let futureFCPeriods=FC_PERIODS.filter(p=>p>latestAP).sort().slice(0,6);
-  // If no future forecast periods, use the last 3 FC periods for comparison
+  // Use next 12 months of forecast for comparison
+  let futureFCPeriods=FC_PERIODS.filter(p=>p>latestAP).sort().slice(0,12);
   if(!futureFCPeriods.length){
-    futureFCPeriods=FC_PERIODS.filter(p=>p<=latestAP).sort().slice(-3);
+    futureFCPeriods=FC_PERIODS.filter(p=>p<=latestAP).sort().slice(-12);
   }
 
   const normV=v=>v.toUpperCase().replace(/\b(LLC|INC|CORP|LTD|CO|COMPANY|GROUP|THE|AND|PRIVATE|PVT|LIMITED|L\.L\.C|INC\.|CORP\.)\b/g,'').replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
 
   const vendorActuals={};
-  AP.filter(r=>last6AP.includes(r.period)).forEach(r=>{
+  AP.filter(r=>last12AP.includes(r.period)).forEach(r=>{
     const k=normV(r.vendor)+'|||'+r.account+'|||'+r.dept;
     if(!vendorActuals[k])vendorActuals[k]={vendor:r.vendor,gl:r.account,dept:r.dept,cc:r.cc,cls:r.cls,periods:{}};
     vendorActuals[k].periods[r.period]=(vendorActuals[k].periods[r.period]||0)+r.amount;
   });
 
   Object.values(vendorActuals).forEach(va=>{
-    const actAmts=last6AP.map(p=>va.periods[p]||0);
-    const actAvg=actAmts.reduce((s,v)=>s+v,0)/Math.max(last6AP.length,1);
-    if(Math.abs(actAvg)<100)return;
+    const actAmts=last12AP.map(p=>va.periods[p]||0);
+    const actTotal=actAmts.reduce((s,v)=>s+v,0);
+    const actAvg=actTotal/Math.max(last12AP.length,1);
+    // Minimum $1,000 total annual spend to avoid noise from tiny vendors
+    if(Math.abs(actTotal)<1000)return;
 
     const matchKey=va.vendor+'||'+va.gl+'||'+va.dept;
     const fcMatch=VENDOR_MATCH_CACHE[matchKey];
@@ -1344,10 +1347,10 @@ function buildAttnData(){
       Object.values(VENDOR_MATCH_CACHE).forEach(m=>{const s=trigramSim(va.vendor,m.fcst_vendor||'');if(s>bestScore&&s>=0.85&&m.gl_code!==va.gl){bestScore=s;bestMatch=m;}});
       if(bestMatch){ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:bestMatch.fcst_vendor,score:bestScore,issue:'GL Mismatch (unmatched)',ap_gl:va.gl,fcst_gl:bestMatch.gl_code,ap_dept:va.dept,fcst_dept:bestMatch.fcst_dept||'—',rec:`Vendor found in Adaptive under GL "${bestMatch.gl_code}" but AP uses "${va.gl}". Align GL coding in NetSuite or Adaptive.`});}
       const activeMonths=actAmts.filter(v=>v>0).length;
-      if(activeMonths>=3&&actAvg>100){
+      if(actTotal>=1000){
         const glName=(FC.find(r=>r.gl_code===va.gl)||{}).gl_name||va.gl;
-        ATTN_DRIFT_ALL.push({vendor:va.vendor,fcst_vendor:'— Not in Adaptive forecast',match_score:0,gl:va.gl,gl_name:glName,dept:va.dept,cc:va.cc,bu:va.cls||'',actAmts,actAvg,fcstAmts:new Array(futureFCPeriods.length).fill(0),fcstAvg:0,variance:-actAvg,varPct:-100,isFav:false,glMismatch:false,deptMismatch:false,noForecast:true,activeMonths,why:`Active vendor with ${activeMonths}/6 months of actuals (avg ${fmtF(actAvg)}/mo) but NO forecast for next 6 months. Add to Adaptive forecast immediately.`,last6AP,futureFCPeriods});
-        if(!vendorInFcstSameGL&&!bestMatch){ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:'Not in Adaptive',score:0,issue:'Missing Forecast — Not in Adaptive',ap_gl:va.gl,fcst_gl:'—',ap_dept:va.dept,fcst_dept:'—',rec:`"${va.vendor}" has actuals in ${activeMonths}/6 months (avg ${fmtF(actAvg)}/mo) but is completely absent from Adaptive forecast. Add this vendor to ensure accurate planning.`});}
+        ATTN_DRIFT_ALL.push({vendor:va.vendor,fcst_vendor:'— Not in Adaptive forecast',match_score:0,gl:va.gl,gl_name:glName,dept:va.dept,cc:va.cc,bu:va.cls||'',actAmts,actAvg,fcstAmts:new Array(futureFCPeriods.length).fill(0),fcstAvg:0,variance:-actAvg,varPct:-100,isFav:false,glMismatch:false,deptMismatch:false,noForecast:true,activeMonths,why:`Active vendor with ${activeMonths}/12 months of actuals (avg ${fmtF(actAvg)}/mo) but NO forecast for next 6 months. Add to Adaptive forecast immediately.`,last12AP,futureFCPeriods});
+        if(!vendorInFcstSameGL&&!bestMatch){ATTN_CODING_ALL.push({vendor:va.vendor,fcst_vendor:'Not in Adaptive',score:0,issue:'Missing Forecast — Not in Adaptive',ap_gl:va.gl,fcst_gl:'—',ap_dept:va.dept,fcst_dept:'—',rec:`"${va.vendor}" has actuals in ${activeMonths}/12 months (avg ${fmtF(actAvg)}/mo) but is completely absent from Adaptive forecast. Add this vendor to ensure accurate planning.`});}
       }
       return;
     }
@@ -1381,9 +1384,9 @@ function buildAttnData(){
     const glName=(FC.find(r=>r.gl_code===va.gl)||{}).gl_name||va.gl;
     const bu=fcMatch.bu||va.cls||'';
     const why=!isFav
-      ?`Actuals avg ${fmtF(actAvg)}/mo is ${Math.abs(varPct).toFixed(0)}% above forecast avg ${fmtF(fcstAvg)}/mo. Forecast may be understated — consider increasing to reflect actual spend run rate.`
-      :`Forecast avg ${fmtF(fcstAvg)}/mo is ${Math.abs(varPct).toFixed(0)}% above actuals avg ${fmtF(actAvg)}/mo. If spend is declining, reduce forecast. If ramp is planned, no change needed.`;
-    ATTN_DRIFT_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,match_score:fcMatch.score,gl:va.gl,gl_name:glName,dept:va.dept,cc:va.cc,bu,actAmts,actAvg,fcstAmts,fcstAvg,variance,varPct,isFav,glMismatch:fcMatch.gl_mismatch,deptMismatch:fcMatch.dept_mismatch,why,last6AP,futureFCPeriods});
+      ?`12-mo actuals total ${fmtF(actTotal)} (avg ${fmtF(actAvg)}/mo) is ${Math.abs(varPct).toFixed(0)}% above 12-mo forecast total ${fmtF(fcstAmts.reduce((s,v)=>s+v,0))} (avg ${fmtF(fcstAvg)}/mo). Forecast may be understated.`
+      :`12-mo forecast total ${fmtF(fcstAmts.reduce((s,v)=>s+v,0))} (avg ${fmtF(fcstAvg)}/mo) is ${Math.abs(varPct).toFixed(0)}% above 12-mo actuals total ${fmtF(actTotal)} (avg ${fmtF(actAvg)}/mo). Consider reducing forecast if spend has permanently declined.`;
+    ATTN_DRIFT_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,match_score:fcMatch.score,gl:va.gl,gl_name:glName,dept:va.dept,cc:va.cc,bu,actAmts,actAvg,fcstAmts,fcstAvg,variance,varPct,isFav,glMismatch:fcMatch.gl_mismatch,deptMismatch:fcMatch.dept_mismatch,why,last12AP,futureFCPeriods});
   });
 
   const seen=new Set();
@@ -1470,7 +1473,7 @@ function renderDollarView(threshold,dirFilter){
     if(thead){
       const cells=[...thead.cells];const actStart=7;
       d0.last6AP.forEach((p,i)=>{if(cells[actStart+i])cells[actStart+i].textContent=toML(p);});
-      const fcstStart=actStart+7;
+      const fcstStart=actStart+d0.last6AP.length+1;
       d0.futureFCPeriods.forEach((p,i)=>{if(cells[fcstStart+i])cells[fcstStart+i].textContent=toML(p);});
     }
   }
