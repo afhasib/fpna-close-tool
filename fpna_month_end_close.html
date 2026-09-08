@@ -1472,8 +1472,8 @@ function renderDollarView(threshold,dirFilter){
     const thead=document.querySelector('#attn-drift-tbody')?.closest('table')?.querySelector('thead tr');
     if(thead){
       const cells=[...thead.cells];const actStart=7;
-      d0.last6AP.forEach((p,i)=>{if(cells[actStart+i])cells[actStart+i].textContent=toML(p);});
-      const fcstStart=actStart+d0.last6AP.length+1;
+      d0.last12AP.forEach((p,i)=>{if(cells[actStart+i])cells[actStart+i].textContent=toML(p);});
+      const fcstStart=actStart+d0.last12AP.length+1;
       d0.futureFCPeriods.forEach((p,i)=>{if(cells[fcstStart+i])cells[fcstStart+i].textContent=toML(p);});
     }
   }
@@ -1520,9 +1520,9 @@ function renderDollarView(threshold,dirFilter){
     const td=e.target.closest('[data-drill]');if(!td)return;
     const idx=parseInt(td.dataset.idx);const d=ATTN_ROW_MAP[idx];if(!d)return;
     const drill=td.dataset.drill;const pi=parseInt(td.dataset.pi||0);
-    if(drill==='act')drillActuals(d.vendor,d.gl,d.dept,d.last6AP[pi]);
+    if(drill==='act')drillActuals(d.vendor,d.gl,d.dept,d.last12AP[pi]);
     else if(drill==='fcst')drillForecast(d.fcst_vendor||d.vendor,d.gl,d.dept,d.futureFCPeriods[pi]);
-    else if(drill==='act-all')drillActualsMulti(d.vendor,d.gl,d.dept,d.last6AP);
+    else if(drill==='act-all')drillActualsMulti(d.vendor,d.gl,d.dept,d.last12AP);
     else if(drill==='fcst-all')drillForecastMulti(d.fcst_vendor||d.vendor,d.gl,d.dept,d.futureFCPeriods);
   };
 }
