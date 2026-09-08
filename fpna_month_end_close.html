@@ -597,19 +597,14 @@ function lsLoad(key){
 }
 
 async function save(){
-  // Primary: localStorage (survives file version changes)
-  lsSave(LS_KEY+'_ap',AP);
-  lsSave(LS_KEY+'_fc',FC);
-  lsSave(LS_KEY+'_fcp',FC_PERIODS);
-  lsSave(LS_KEY+'_log',LOG);
-  lsSave(LS_KEY+'_dec',ACC_DEC);
-  lsSave(LS_KEY+'_com',COMMENTARY);
-  // Secondary: IndexedDB
+  // Primary: IndexedDB (no size limit — handles 40K+ AP records)
   try{
     if(!DB)DB=await openDB();
     await dbSet('AP',AP);await dbSet('FC',FC);await dbSet('FC_PERIODS',FC_PERIODS);
     await dbSet('LOG',LOG);await dbSet('ACC_DEC',ACC_DEC);await dbSet('COMMENTARY',COMMENTARY);
-  }catch(e){console.warn('IndexedDB save failed, localStorage is primary:',e);}
+  }catch(e){console.warn('IndexedDB save failed:',e);}
+  // Secondary: localStorage for small items only (decisions, commentary)
+  try{lsSave(LS_KEY+'_dec',ACC_DEC);lsSave(LS_KEY+'_com',COMMENTARY);}catch(e){}
 }
 
 async function load(){
@@ -1318,7 +1313,11 @@ function buildAttnData(){
   const apPeriods=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
   const last6AP=apPeriods.slice(-6);
   const latestAP=apPeriods[apPeriods.length-1];
-  const futureFCPeriods=FC_PERIODS.filter(p=>p>latestAP).sort().slice(0,6);
+  let futureFCPeriods=FC_PERIODS.filter(p=>p>latestAP).sort().slice(0,6);
+  // If no future forecast periods, use the last 3 FC periods for comparison
+  if(!futureFCPeriods.length){
+    futureFCPeriods=FC_PERIODS.filter(p=>p<=latestAP).sort().slice(-3);
+  }
 
   const normV=v=>v.toUpperCase().replace(/\b(LLC|INC|CORP|LTD|CO|COMPANY|GROUP|THE|AND|PRIVATE|PVT|LIMITED|L\.L\.C|INC\.|CORP\.)\b/g,'').replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
 
@@ -1386,10 +1385,8 @@ function buildAttnData(){
     ATTN_DRIFT_ALL.push({vendor:va.vendor,fcst_vendor:fcMatch.fcst_vendor,match_score:fcMatch.score,gl:va.gl,gl_name:glName,dept:va.dept,cc:va.cc,bu,actAmts,actAvg,fcstAmts,fcstAvg,variance,varPct,isFav,glMismatch:fcMatch.gl_mismatch,deptMismatch:fcMatch.dept_mismatch,why,last6AP,futureFCPeriods});
   });
 
-  // Debug: log summary
-  console.log(`buildAttnData: ${ATTN_DRIFT_ALL.length} drift items, ${ATTN_CODING_ALL.length} coding issues`);
-  const aonItems=ATTN_DRIFT_ALL.filter(d=>d.vendor.toUpperCase().includes('AON'));
-  console.log('AON items in ATTN_DRIFT_ALL:', aonItems.map(d=>({vendor:d.vendor,varPct:d.varPct,dept:d.dept})));
+  const seen=new Set();
+  ATTN_CODING_ALL=ATTN_CODING_ALL.filter(i=>{const k=i.vendor+'||'+i.issue+'||'+i.ap_gl;if(seen.has(k))return false;seen.add(k);return true;});
 }
 
 let _attnDebounce=null;
@@ -1404,13 +1401,12 @@ function _renderAttentionNow(){
   document.getElementById('attn-content').style.display=has?'block':'none';
   if(!has)return;
 
-  // Populate filters from actual drift data so vendor names match exactly
-  const attnVendors=[...new Set(ATTN_DRIFT_ALL.map(d=>d.vendor))].filter(Boolean).sort();
-  initMS('ms-attn-vendor',attnVendors.length?attnVendors:[...new Set(AP.map(r=>r.vendor))].filter(Boolean),_renderAttentionNow);
-  initMS('ms-attn-dept',[...new Set(AP.map(r=>r.dept))].filter(Boolean),_renderAttentionNow);
-  initMS('ms-attn-gl',[...new Set(AP.map(r=>r.account))].filter(Boolean),_renderAttentionNow);
-  initMS('ms-attn-bu',[...new Set(FC.map(r=>r.bu))].filter(Boolean),_renderAttentionNow);
-  initMS('ms-coding-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean),renderCodingIssues);
+  // Populate filters from AP/FC (full vendor list for searching)
+  initMS('ms-attn-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean).sort(),_renderAttentionNow);
+  initMS('ms-attn-dept',[...new Set(AP.map(r=>r.dept))].filter(Boolean).sort(),_renderAttentionNow);
+  initMS('ms-attn-gl',[...new Set(AP.map(r=>r.account))].filter(Boolean).sort(),_renderAttentionNow);
+  initMS('ms-attn-bu',[...new Set(FC.map(r=>r.bu))].filter(Boolean).sort(),_renderAttentionNow);
+  initMS('ms-coding-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean).sort(),renderCodingIssues);
 
   const threshold=parseInt(document.getElementById('attn-threshold')?.value||'10');
   const dirFilter=document.getElementById('attn-direction')?.value||'';
@@ -1440,12 +1436,18 @@ function renderDollarView(threshold,dirFilter){
   dirFilter=dirFilter||document.getElementById('attn-direction')?.value||'';
 
   const vendorF=getMS('ms-attn-vendor'),deptF=getMS('ms-attn-dept'),glF=getMS('ms-attn-gl');
-  console.log('renderDollarView: vendorF=',vendorF,'ATTN_DRIFT_ALL length=',ATTN_DRIFT_ALL.length,'threshold=',threshold);
 
   let items=ATTN_DRIFT_ALL.filter(d=>Math.abs(d.varPct)>=threshold);
-  if(dirFilter==='unfav')items=items.filter(d=>!d.isFav);
+  if(dirFilter==='unfav')items=items.filter(d=>!d.isFav&&!d.noForecast);
   if(dirFilter==='fav')items=items.filter(d=>d.isFav);
-  if(vendorF)items=items.filter(d=>vendorF.some(v=>normalize(v)===normalize(d.vendor)||v===d.vendor));
+  if(vendorF){
+    // Match using normalized names — handles "AON CONSULTING, INC" vs "AON CONSULTING INC" etc
+    const normFilters=vendorF.map(v=>normalize(v));
+    items=items.filter(d=>{
+      const normD=normalize(d.vendor);
+      return vendorF.includes(d.vendor)||normFilters.includes(normD)||normFilters.some(nf=>normD.includes(nf)||nf.includes(normD));
+    });
+  }
   if(deptF)items=items.filter(d=>deptF.includes(d.dept));
   if(glF)items=items.filter(d=>glF.includes(d.gl));
   items.sort((a,b)=>ATTN_SORT.dir*(Math.abs(b[ATTN_SORT.col]||0)-Math.abs(a[ATTN_SORT.col]||0)));
