@@ -404,6 +404,7 @@
             <div class="filter-bar">
               <span class="filter-label">Threshold:</span>
               <select id="attn-threshold" onchange="renderAttention()" style="font-size:12px">
+                <option value="5">≥ 5% variance</option>
                 <option value="10">≥ 10% variance</option>
                 <option value="20">≥ 20% variance</option>
                 <option value="30">≥ 30% variance</option>
@@ -1408,7 +1409,7 @@ function _renderAttentionNow(){
   initMS('ms-attn-bu',[...new Set(FC.map(r=>r.bu))].filter(Boolean).sort(),_renderAttentionNow);
   initMS('ms-coding-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean).sort(),renderCodingIssues);
 
-  const threshold=parseInt(document.getElementById('attn-threshold')?.value||'10');
+  const threshold=parseInt(document.getElementById('attn-threshold')?.value||'5');
   const dirFilter=document.getElementById('attn-direction')?.value||'';
 
   const tot=ATTN_DRIFT_ALL.filter(d=>Math.abs(d.varPct)>=threshold).length+ATTN_CODING_ALL.length;
@@ -1432,7 +1433,7 @@ function sortIcon(col){return ATTN_SORT.col===col?(ATTN_SORT.dir===-1?'▼':'▲
 let ATTN_ROW_MAP={};
 
 function renderDollarView(threshold,dirFilter){
-  threshold=threshold||parseInt(document.getElementById('attn-threshold')?.value||'10');
+  threshold=threshold||parseInt(document.getElementById('attn-threshold')?.value||'5');
   dirFilter=dirFilter||document.getElementById('attn-direction')?.value||'';
 
   const vendorF=getMS('ms-attn-vendor'),deptF=getMS('ms-attn-dept'),glF=getMS('ms-attn-gl');
