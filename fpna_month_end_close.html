@@ -427,8 +427,8 @@
               <button class="btn btn-sm" onclick="toggleAttnCols('act')" id="btn-act-cols">▼ Actuals</button>
               <button class="btn btn-sm" onclick="toggleAttnCols('fcst')" id="btn-fcst-cols">▼ Forecast</button>
             </div>
-            <div class="table-wrap" style="overflow-x:auto;overflow-y:visible">
-              <table style="font-size:11px;min-width:max-content" id="attn-main-table">
+            <div class="table-wrap" style="overflow-x:auto;overflow-y:visible;padding-bottom:12px">
+              <table style="font-size:11px;border-collapse:collapse;width:max-content;min-width:100%" id="attn-main-table">
                 <thead>
                   <tr>
                     <th rowspan="2" style="min-width:140px;vertical-align:bottom">Vendor (AP)</th>
@@ -1473,11 +1473,11 @@ let ATTN_COLS_ACT=true,ATTN_COLS_FCST=true;
 function toggleAttnCols(type){
   if(type==='act'){
     ATTN_COLS_ACT=!ATTN_COLS_ACT;
-    document.querySelectorAll('.attn-act-col').forEach(el=>el.classList.toggle('collapsed',!ATTN_COLS_ACT));
+    document.querySelectorAll('#attn-main-table .attn-act-col').forEach(el=>el.classList.toggle('collapsed',!ATTN_COLS_ACT));
     document.getElementById('btn-act-cols').textContent=(ATTN_COLS_ACT?'▼':'▶')+' Actuals';
   } else {
     ATTN_COLS_FCST=!ATTN_COLS_FCST;
-    document.querySelectorAll('.attn-fcst-col').forEach(el=>el.classList.toggle('collapsed',!ATTN_COLS_FCST));
+    document.querySelectorAll('#attn-main-table .attn-fcst-col').forEach(el=>el.classList.toggle('collapsed',!ATTN_COLS_FCST));
     document.getElementById('btn-fcst-cols').textContent=(ATTN_COLS_FCST?'▼':'▶')+' Forecast';
   }
 }
@@ -1533,14 +1533,26 @@ function renderDollarView(threshold,dirFilter){
   ['actAvg','fcstAvg','variance','varPct','actTotal','fcstTotal'].forEach(col=>{const el=document.getElementById('si-'+col);if(el)el.textContent=sortIcon(col);});
 
   // Update period headers once
+  // Update period labels and apply collapsed state to header
   if(items.length>0){
     const d0=items[0];
-    const thead=document.querySelector('#attn-drift-tbody')?.closest('table')?.querySelector('thead tr');
-    if(thead){
-      const cells=[...thead.cells];const actStart=7;
-      d0.last12AP.forEach((p,i)=>{if(cells[actStart+i])cells[actStart+i].textContent=toML(p);});
-      const fcstStart=actStart+d0.last12AP.length+1;
-      d0.futureFCPeriods.forEach((p,i)=>{if(cells[fcstStart+i])cells[fcstStart+i].textContent=toML(p);});
+    const periodRow=document.getElementById('attn-period-row');
+    if(periodRow){
+      const ths=[...periodRow.querySelectorAll('th')];
+      d0.last12AP.forEach((p,i)=>{
+        if(ths[i]){ths[i].textContent=toML(p);ths[i].classList.toggle('collapsed',!ATTN_COLS_ACT);}
+      });
+      d0.futureFCPeriods.forEach((p,i)=>{
+        if(ths[13+i]){ths[13+i].textContent=toML(p);ths[13+i].classList.toggle('collapsed',!ATTN_COLS_FCST);}
+      });
+    }
+    // Also apply to group header spans
+    const groupRow=document.querySelector('#attn-main-table thead tr:first-child');
+    if(groupRow){
+      const actGrp=groupRow.querySelector('.attn-act-group[colspan]');
+      const fcstGrp=groupRow.querySelector('.attn-fcst-group[colspan]');
+      if(actGrp)actGrp.colSpan=ATTN_COLS_ACT?13:1;
+      if(fcstGrp)fcstGrp.colSpan=ATTN_COLS_FCST?13:1;
     }
   }
 
@@ -1557,8 +1569,10 @@ function renderDollarView(threshold,dirFilter){
     const varClass=!d.isFav?'var-pos':'var-neg';
     const rowBg=d.glMismatch||d.deptMismatch?'background:var(--yellow-light)':'';
     // Use data-idx attribute for drill-down — no inline onclick or JSON
-    const actCells=d.actAmts.map((v,i)=>`<td class="td-r attn-act-col${ATTN_COLS_ACT?'':' collapsed'}" style="font-size:10px;color:var(--text3)${v?';cursor:pointer;text-decoration:underline dotted':''}" ${v?`data-drill="act" data-idx="${idx}" data-pi="${i}" title="Click to see AP transactions"`:''}>${v?fmt(v):'—'}</td>`).join('');
-    const fcstCells=d.fcstAmts.map((v,i)=>`<td class="td-r attn-fcst-col${ATTN_COLS_FCST?'':' collapsed'}" style="font-size:10px;color:var(--blue)${v?';cursor:pointer;text-decoration:underline dotted':''}" ${v?`data-drill="fcst" data-idx="${idx}" data-pi="${i}" title="Click to see forecast detail"`:''}>${v?fmt(v):'—'}</td>`).join('');
+    const actCollapsed=ATTN_COLS_ACT?'':' collapsed';
+    const fcstCollapsed=ATTN_COLS_FCST?'':' collapsed';
+    const actCells=d.actAmts.map((v,i)=>`<td class="td-r attn-act-col${actCollapsed}" style="font-size:10px;color:var(--text3)${v?';cursor:pointer;text-decoration:underline dotted':''}" ${v?`data-drill="act" data-idx="${idx}" data-pi="${i}" title="Click to see AP transactions"`:''}>${v?fmt(v):'—'}</td>`).join('');
+    const fcstCells=d.fcstAmts.map((v,i)=>`<td class="td-r attn-fcst-col${fcstCollapsed}" style="font-size:10px;color:var(--blue)${v?';cursor:pointer;text-decoration:underline dotted':''}" ${v?`data-drill="fcst" data-idx="${idx}" data-pi="${i}" title="Click to see forecast detail"`:''}>${v?fmt(v):'—'}</td>`).join('');
     const actTotal=d.actAmts.reduce((s,v)=>s+v,0);
     const fcstTotal=d.fcstAmts.reduce((s,v)=>s+v,0);
     const totalVar=fcstTotal-actTotal;
