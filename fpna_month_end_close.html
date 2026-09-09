@@ -1509,13 +1509,11 @@ function renderDollarView(threshold,dirFilter){
   </tr>
   <tr style="background:var(--surface2);font-weight:600">
     <th ${tl('min-width:180px')}>Vendor (AP)</th>
-    <th ${tl('min-width:130px')}>GL Code : GL Name</th>
-    <th ${tl('min-width:140px;font-weight:400')}>Dept / Cost Center</th>
-    <th ${tl('min-width:60px;border-right:2px solid var(--border);font-weight:400')}>BU</th>
-    <th ${tr('border-left:2px solid var(--border);min-width:90px;cursor:pointer')} onclick="sortAttn('actAvg')">${actHide?'▶ Actuals':'Avg/Mo Act'} <span id="si-actAvg">${sortIcon('actAvg')}</span></th>
-    ${actMonthThs}
-    <th ${tr('border-left:2px solid #bfdbfe;min-width:90px;cursor:pointer;color:var(--blue)')} onclick="sortAttn('fcstAvg')">${fcstHide?'▶ Forecast':'Avg/Mo Fcst'} <span id="si-fcstAvg">${sortIcon('fcstAvg')}</span></th>
-    ${fcstMonthThs}
+    <th ${tl('min-width:140px')}>GL Code</th>
+    <th ${tl('min-width:130px;font-weight:400')}>Department</th>
+    <th ${tl('min-width:100px;border-right:2px solid var(--border);font-weight:400')}>BU / Class</th>
+    ${actHide?`<th ${tr('border-left:2px solid var(--border);min-width:90px;cursor:pointer')} onclick="sortAttn('actAvg')">▶ Actuals <span id="si-actAvg">${sortIcon('actAvg')}</span></th>`:`${actMonthThs}<th ${tr('border-left:1px solid var(--border);min-width:90px;cursor:pointer;font-weight:700')} onclick="sortAttn('actAvg')">Avg/Mo Act <span id="si-actAvg">${sortIcon('actAvg')}</span></th>`}
+    ${fcstHide?`<th ${tr('border-left:2px solid #bfdbfe;min-width:90px;cursor:pointer;color:var(--blue)')} onclick="sortAttn('fcstAvg')">▶ Forecast <span id="si-fcstAvg">${sortIcon('fcstAvg')}</span></th>`:`${fcstMonthThs}<th ${tr('border-left:1px solid var(--border);min-width:90px;cursor:pointer;font-weight:700;color:var(--blue)')} onclick="sortAttn('fcstAvg')">Avg/Mo Fcst <span id="si-fcstAvg">${sortIcon('fcstAvg')}</span></th>`}
     <th ${tr('border-left:2px solid var(--accent);min-width:90px;cursor:pointer')} onclick="sortAttn('actTotal')">Total Act 12M <span id="si-actTotal">${sortIcon('actTotal')}</span></th>
     <th ${tr('min-width:90px;cursor:pointer;color:var(--blue)')} onclick="sortAttn('fcstTotal')">Total Fcst 12M <span id="si-fcstTotal">${sortIcon('fcstTotal')}</span></th>
     <th ${tr('min-width:85px;cursor:pointer')} onclick="sortAttn('variance')">Variance $ <span id="si-variance">${sortIcon('variance')}</span></th>
@@ -1549,13 +1547,13 @@ function renderDollarView(threshold,dirFilter){
     const totalVarClass=totalVar<0?'var-pos':'var-neg';
     return`<tr data-idx="${idx}" style="border-top:1px solid var(--border);${rowBg}">
       <td style="${p};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:${d.glMismatch||d.deptMismatch?'var(--yellow-light)':'var(--surface)'};z-index:1;min-width:180px" title="${esc(d.vendor)}">${esc(d.vendor)}<br><span style="font-size:9px;color:var(--text3);font-weight:400">${esc(d.fcst_vendor)}${mNote} ${Math.round(d.match_score*100)}%</span></td>
-      <td style="${p};min-width:130px" title="${esc(d.gl)} — ${esc(d.gl_name)}"><span class="tag tag-gl" style="font-size:9px">${esc(d.gl)}</span><br><span style="font-size:9px;color:var(--text3)">${esc(d.gl_name.length>20?d.gl_name.slice(0,20)+'…':d.gl_name)}</span></td>
-      <td style="${p};font-size:10px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.dept)} / ${esc(d.cc)}">${esc(d.dept)}${d.cc&&d.cc!==d.dept?`<br><span style='font-size:9px'>${esc(d.cc)}</span>`:''}</td>
-      <td style="${p};font-size:10px;color:var(--text3);border-right:2px solid var(--border)">${esc(d.bu)}</td>
+      <td style="${p};min-width:140px" title="${esc(d.gl)} — ${esc(d.gl_name)}"><span class="tag tag-gl" style="font-size:9px">${esc(d.gl)}</span><br><span style="font-size:9px;color:var(--text3)">${esc(d.gl_name.length>22?d.gl_name.slice(0,22)+'…':d.gl_name)}</span></td>
+      <td style="${p};font-size:10px;color:var(--text3);max-width:130px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.dept)}">${esc(d.dept)}</td>
+      <td style="${p};font-size:10px;color:var(--text3);border-right:2px solid var(--border);max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.bu)}">${esc(d.bu)}</td>
       ${actCells}
       <td class="td-r" style="${p};font-weight:700;font-size:11px;cursor:pointer;text-decoration:underline dotted;border-left:1px solid var(--border)" data-drill="act-all" data-idx="${idx}" title="Click to see all 12 months">${fmtF(d.actAvg)}</td>
       ${fcstCells}
-      <td class="td-r" style="${p};font-weight:700;color:var(--blue);font-size:11px;cursor:pointer;text-decoration:underline dotted;border-left:1px solid var(--border)" data-drill="fcst-all" data-idx="${idx}" title="Click to see all forecast rows">${fmtF(d.fcstAvg)}</td>
+      <td class="td-r" style="${p};font-weight:700;color:var(--blue);font-size:11px;cursor:pointer;text-decoration:underline dotted;border-left:1px solid var(--border)" data-drill="fcst-all" data-idx="${idx}" title="Click to see all forecast rows">${fmtF(d.fcstAvg)}</td> title="Click to see all forecast rows">${fmtF(d.fcstAvg)}</td>
       <td class="td-r" style="${p};font-weight:700;font-size:11px;border-left:2px solid var(--accent)">${fmtF(actTotal)}</td>
       <td class="td-r" style="${p};font-weight:700;color:var(--blue);font-size:11px">${fmtF(fcstTotal)}</td>
       <td class="td-r ${totalVarClass}" style="${p};font-weight:700;font-size:11px">${fmtF(totalVar)}</td>
