@@ -1501,19 +1501,16 @@ function renderDollarView(threshold,dirFilter){
   const fcstGrpCols=fcstHide?1:fcstPeriods.length+1;
   document.getElementById('attn-thead').innerHTML=`
   <tr style="background:var(--surface2);font-size:10px">
-    <th colspan="7" ${tl()}>VENDOR / GL / DEPARTMENT</th>
+    <th colspan="4" ${tl()}>VENDOR / GL / DEPARTMENT</th>
     <th colspan="${actGrpCols}" style="padding:5px 8px;text-align:center;border-left:2px solid var(--border);background:var(--surface2);cursor:pointer;color:var(--text2)" onclick="toggleAttnCols('act')" title="Click to collapse/expand">${actHide?'▶':'▼'} ACTUALS (12 MONTHS)</th>
     <th colspan="${fcstGrpCols}" style="padding:5px 8px;text-align:center;border-left:2px solid #bfdbfe;background:var(--blue-light);cursor:pointer;color:var(--blue)" onclick="toggleAttnCols('fcst')" title="Click to collapse/expand">${fcstHide?'▶':'▼'} FORECAST (12 MONTHS)</th>
     <th colspan="4" style="padding:5px 8px;text-align:center;border-left:2px solid var(--accent);background:var(--accent-light);color:var(--accent)">VARIANCE SUMMARY</th>
     <th colspan="2" style="padding:5px 8px;background:var(--surface2)"></th>
   </tr>
   <tr style="background:var(--surface2);font-weight:600">
-    <th ${tl('min-width:150px')}>Vendor (AP)</th>
-    <th ${tl('min-width:110px;font-weight:400')}>Matched Fcst Vendor</th>
-    <th ${tl('min-width:80px')}>GL Code</th>
-    <th ${tl('min-width:100px;font-weight:400')}>GL Name</th>
-    <th ${tl('min-width:100px;font-weight:400')}>Department</th>
-    <th ${tl('min-width:70px;font-weight:400')}>CC</th>
+    <th ${tl('min-width:180px')}>Vendor (AP)</th>
+    <th ${tl('min-width:130px')}>GL Code : GL Name</th>
+    <th ${tl('min-width:140px;font-weight:400')}>Dept / Cost Center</th>
     <th ${tl('min-width:60px;border-right:2px solid var(--border);font-weight:400')}>BU</th>
     <th ${tr('border-left:2px solid var(--border);min-width:90px;cursor:pointer')} onclick="sortAttn('actAvg')">${actHide?'▶ Actuals':'Avg/Mo Act'} <span id="si-actAvg">${sortIcon('actAvg')}</span></th>
     ${actMonthThs}
@@ -1551,12 +1548,9 @@ function renderDollarView(threshold,dirFilter){
     const totalVarPct=actTotal!==0?(totalVar/Math.abs(actTotal)*100):0;
     const totalVarClass=totalVar<0?'var-pos':'var-neg';
     return`<tr data-idx="${idx}" style="border-top:1px solid var(--border);${rowBg}">
-      <td style="${p};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:${d.glMismatch||d.deptMismatch?'var(--yellow-light)':'var(--surface)'};z-index:1" title="${esc(d.vendor)}">${esc(d.vendor)}</td>
-      <td style="${p};font-size:10px;color:var(--text3);max-width:110px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.fcst_vendor)}">${esc(d.fcst_vendor)}${mNote} <span style="font-size:9px">${Math.round(d.match_score*100)}%</span></td>
-      <td style="${p}"><span class="tag tag-gl" style="font-size:9px">${esc(d.gl)}</span></td>
-      <td style="${p};font-size:10px;color:var(--text3);max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.gl_name)}">${esc(d.gl_name)}</td>
-      <td style="${p};font-size:10px;color:var(--text3);max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.dept)}">${esc(d.dept)}</td>
-      <td style="${p};font-size:10px;color:var(--text3)">${esc(d.cc)}</td>
+      <td style="${p};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:${d.glMismatch||d.deptMismatch?'var(--yellow-light)':'var(--surface)'};z-index:1;min-width:180px" title="${esc(d.vendor)}">${esc(d.vendor)}<br><span style="font-size:9px;color:var(--text3);font-weight:400">${esc(d.fcst_vendor)}${mNote} ${Math.round(d.match_score*100)}%</span></td>
+      <td style="${p};min-width:130px" title="${esc(d.gl)} — ${esc(d.gl_name)}"><span class="tag tag-gl" style="font-size:9px">${esc(d.gl)}</span><br><span style="font-size:9px;color:var(--text3)">${esc(d.gl_name.length>20?d.gl_name.slice(0,20)+'…':d.gl_name)}</span></td>
+      <td style="${p};font-size:10px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.dept)} / ${esc(d.cc)}">${esc(d.dept)}${d.cc&&d.cc!==d.dept?`<br><span style='font-size:9px'>${esc(d.cc)}</span>`:''}</td>
       <td style="${p};font-size:10px;color:var(--text3);border-right:2px solid var(--border)">${esc(d.bu)}</td>
       ${actCells}
       <td class="td-r" style="${p};font-weight:700;font-size:11px;cursor:pointer;text-decoration:underline dotted;border-left:1px solid var(--border)" data-drill="act-all" data-idx="${idx}" title="Click to see all 12 months">${fmtF(d.actAvg)}</td>
