@@ -428,80 +428,20 @@
             </div>
             <!-- Column toggle buttons -->
             <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <span style="font-size:12px;color:var(--text3)">Show/Hide:</span>
-              <button class="btn btn-sm" id="btn-act-cols" onclick="toggleAttnCols('act')" style="min-width:90px">▼ Actuals</button>
-              <button class="btn btn-sm" id="btn-fcst-cols" onclick="toggleAttnCols('fcst')" style="min-width:90px">▼ Forecast</button>
-              <span style="font-size:11px;color:var(--text3);margin-left:8px">Scroll right to see all columns →</span>
+              <span style="font-size:12px;color:var(--text3)">Show/Hide columns:</span>
+              <button class="btn btn-sm" id="btn-act-cols" onclick="toggleAttnCols('act')">▼ Actuals (12 mo)</button>
+              <button class="btn btn-sm" id="btn-fcst-cols" onclick="toggleAttnCols('fcst')">▼ Forecast (12 mo)</button>
             </div>
-
-            <!-- Outer scroll container — always shows horizontal scrollbar -->
-            <div id="attn-scroll-wrap" style="width:100%;overflow-x:scroll;overflow-y:visible;padding-bottom:16px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)">
-              <table id="attn-main-table" style="font-size:11px;border-collapse:collapse;white-space:nowrap">
-                <thead>
-                  <tr id="attn-group-row" style="background:var(--surface2)">
-                    <!-- Fixed info cols -->
-                    <th colspan="7" style="padding:6px 10px;text-align:left;font-size:10px;color:var(--text3);border-bottom:1px solid var(--border)">VENDOR / GL / DEPARTMENT</th>
-                    <!-- Actuals group -->
-                    <th id="attn-act-hdr" colspan="13" style="padding:6px 10px;text-align:center;font-size:10px;color:var(--text2);border-bottom:2px solid var(--border);border-left:2px solid var(--border)">── ACTUALS (12 MONTHS) ──</th>
-                    <!-- Forecast group -->
-                    <th id="attn-fcst-hdr" colspan="13" style="padding:6px 10px;text-align:center;font-size:10px;color:var(--blue);border-bottom:2px solid var(--blue);border-left:2px solid var(--blue-border,#bfdbfe)">── FORECAST (12 MONTHS) ──</th>
-                    <!-- Summary cols -->
-                    <th colspan="4" style="padding:6px 10px;text-align:center;font-size:10px;color:var(--text2);border-bottom:2px solid var(--accent);border-left:2px solid var(--accent)">── SUMMARY ──</th>
-                    <th style="border-bottom:1px solid var(--border)"></th>
-                    <th style="border-bottom:1px solid var(--border)"></th>
-                  </tr>
-                  <tr id="attn-period-row" style="background:var(--surface2)">
-                    <th style="padding:6px 10px;text-align:left;min-width:140px;position:sticky;left:0;background:var(--surface2);z-index:2">Vendor (AP)</th>
-                    <th style="padding:6px 10px;text-align:left;min-width:110px">Matched Vendor</th>
-                    <th style="padding:6px 10px;text-align:left;min-width:90px">GL Code</th>
-                    <th style="padding:6px 10px;text-align:left;min-width:100px">GL Name</th>
-                    <th style="padding:6px 10px;text-align:left;min-width:100px">Department</th>
-                    <th style="padding:6px 10px;text-align:left;min-width:70px">CC</th>
-                    <th style="padding:6px 10px;text-align:left;min-width:60px;border-right:2px solid var(--border)">BU</th>
-                    <!-- Act months — populated by JS -->
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3);border-left:2px solid var(--border)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th class="attn-act-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--text3)">M</th>
-                    <th style="padding:5px 8px;text-align:right;min-width:85px;font-weight:700;cursor:pointer;border-left:1px solid var(--border)" onclick="sortAttn('actAvg')">Avg/Mo <span id="si-actAvg">⇅</span></th>
-                    <!-- Fcst months -->
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue);border-left:2px solid var(--blue-border,#bfdbfe)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th class="attn-fcst-col" style="padding:5px 8px;text-align:right;min-width:70px;color:var(--blue)">M</th>
-                    <th style="padding:5px 8px;text-align:right;min-width:85px;font-weight:700;color:var(--blue);cursor:pointer;border-left:1px solid var(--border)" onclick="sortAttn('fcstAvg')">Avg/Mo <span id="si-fcstAvg">⇅</span></th>
-                    <!-- Summary -->
-                    <th style="padding:5px 8px;text-align:right;min-width:90px;cursor:pointer;border-left:2px solid var(--accent)" onclick="sortAttn('actTotal')">Total Act <span id="si-actTotal">⇅</span></th>
-                    <th style="padding:5px 8px;text-align:right;min-width:90px;color:var(--blue);cursor:pointer" onclick="sortAttn('fcstTotal')">Total Fcst <span id="si-fcstTotal">⇅</span></th>
-                    <th style="padding:5px 8px;text-align:right;min-width:85px;cursor:pointer" onclick="sortAttn('variance')">Var $ <span id="si-variance">⇅</span></th>
-                    <th style="padding:5px 8px;text-align:right;min-width:70px;cursor:pointer" onclick="sortAttn('varPct')">Var % <span id="si-varPct">▼</span></th>
-                    <th style="padding:5px 8px;min-width:100px">Direction</th>
-                    <th style="padding:5px 8px;min-width:180px">Explanation</th>
-                  </tr>
+            <div style="width:100%;overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)">
+              <table id="attn-main-table" style="font-size:11px;border-collapse:collapse;white-space:nowrap;min-width:100%">
+                <thead id="attn-thead" style="background:var(--surface2)">
+                  <!-- Built dynamically by renderDollarView -->
                 </thead>
                 <tbody id="attn-drift-tbody"></tbody>
               </table>
             </div>
 
-          </div>
-
-          <!-- CODING VIEW -->
+          <!-- CODING VIEW -->          <!-- CODING VIEW -->
           <div id="attn-coding-view" style="display:none">
             <div class="stats s3 mb12">
               <div class="stat sv-yellow"><div class="stat-label">Coding Issues Found</div><div class="stat-value" id="attn-gaps">—</div></div>
@@ -1489,19 +1429,12 @@ function _renderAttentionNow(){
 
 let ATTN_COLS_ACT=true,ATTN_COLS_FCST=true;
 function toggleAttnCols(type){
-  if(type==='act'){
-    ATTN_COLS_ACT=!ATTN_COLS_ACT;
-    document.querySelectorAll('#attn-main-table .attn-act-col').forEach(el=>el.classList.toggle('collapsed',!ATTN_COLS_ACT));
-    const hdr=document.getElementById('attn-act-hdr');
-    if(hdr)hdr.colSpan=ATTN_COLS_ACT?13:1;
-    document.getElementById('btn-act-cols').textContent=(ATTN_COLS_ACT?'▼':'▶')+' Actuals';
-  } else {
-    ATTN_COLS_FCST=!ATTN_COLS_FCST;
-    document.querySelectorAll('#attn-main-table .attn-fcst-col').forEach(el=>el.classList.toggle('collapsed',!ATTN_COLS_FCST));
-    const hdr=document.getElementById('attn-fcst-hdr');
-    if(hdr)hdr.colSpan=ATTN_COLS_FCST?13:1;
-    document.getElementById('btn-fcst-cols').textContent=(ATTN_COLS_FCST?'▼':'▶')+' Forecast';
-  }
+  if(type==='act') ATTN_COLS_ACT=!ATTN_COLS_ACT;
+  else ATTN_COLS_FCST=!ATTN_COLS_FCST;
+  document.getElementById('btn-act-cols').textContent=(ATTN_COLS_ACT?'▼':'▶')+' Actuals (12 mo)';
+  document.getElementById('btn-fcst-cols').textContent=(ATTN_COLS_FCST?'▼':'▶')+' Forecast (12 mo)';
+  // Rebuild entire table with new collapse state
+  renderDollarView();
 }
 
 let ATTN_SORT={col:'varPct',dir:-1}; // default: sort by variance % descending
@@ -1555,30 +1488,45 @@ function renderDollarView(threshold,dirFilter){
   ['actAvg','fcstAvg','variance','varPct','actTotal','fcstTotal'].forEach(col=>{const el=document.getElementById('si-'+col);if(el)el.textContent=sortIcon(col);});
 
   // Update period headers once
-  // Update period labels and apply collapsed state to header
-  if(items.length>0){
-    const d0=items[0];
-    const periodRow=document.getElementById('attn-period-row');
-    if(periodRow){
-      const ths=[...periodRow.querySelectorAll('th')];
-      d0.last12AP.forEach((p,i)=>{
-        if(ths[i]){ths[i].textContent=toML(p);ths[i].classList.toggle('collapsed',!ATTN_COLS_ACT);}
-      });
-      d0.futureFCPeriods.forEach((p,i)=>{
-        if(ths[13+i]){ths[13+i].textContent=toML(p);ths[13+i].classList.toggle('collapsed',!ATTN_COLS_FCST);}
-      });
-    }
-    // Also apply to group header spans
-    const groupRow=document.querySelector('#attn-main-table thead tr:first-child');
-    if(groupRow){
-      const actGrp=groupRow.querySelector('.attn-act-group[colspan]');
-      const fcstGrp=groupRow.querySelector('.attn-fcst-group[colspan]');
-      if(actGrp)actGrp.colSpan=ATTN_COLS_ACT?13:1;
-      if(fcstGrp)fcstGrp.colSpan=ATTN_COLS_FCST?13:1;
-    }
-  }
+  // Build thead dynamically — always in sync with data and collapse state
+  const actHide=!ATTN_COLS_ACT, fcstHide=!ATTN_COLS_FCST;
+  const d0=items[0];
+  const actPeriods=d0?d0.last12AP:[];
+  const fcstPeriods=d0?d0.futureFCPeriods:[];
+  const tr=(s='')=>`style="padding:5px 8px;text-align:right;white-space:nowrap;${s}"`;
+  const tl=(s='')=>`style="padding:5px 8px;text-align:left;white-space:nowrap;${s}"`;
+  const actMonthThs=actHide?'':actPeriods.map((p,i)=>`<th ${tr(i===0?'border-left:1px solid var(--border);color:var(--text3)':'color:var(--text3)')}>${toML(p)}</th>`).join('');
+  const fcstMonthThs=fcstHide?'':fcstPeriods.map((p,i)=>`<th ${tr(i===0?'border-left:1px solid var(--border);color:var(--blue)':'color:var(--blue)')}>${toML(p)}</th>`).join('');
+  const actGrpCols=actHide?1:actPeriods.length+1;
+  const fcstGrpCols=fcstHide?1:fcstPeriods.length+1;
+  document.getElementById('attn-thead').innerHTML=`
+  <tr style="background:var(--surface2);font-size:10px">
+    <th colspan="7" ${tl()}>VENDOR / GL / DEPARTMENT</th>
+    <th colspan="${actGrpCols}" style="padding:5px 8px;text-align:center;border-left:2px solid var(--border);background:var(--surface2);cursor:pointer;color:var(--text2)" onclick="toggleAttnCols('act')" title="Click to collapse/expand">${actHide?'▶':'▼'} ACTUALS (12 MONTHS)</th>
+    <th colspan="${fcstGrpCols}" style="padding:5px 8px;text-align:center;border-left:2px solid #bfdbfe;background:var(--blue-light);cursor:pointer;color:var(--blue)" onclick="toggleAttnCols('fcst')" title="Click to collapse/expand">${fcstHide?'▶':'▼'} FORECAST (12 MONTHS)</th>
+    <th colspan="4" style="padding:5px 8px;text-align:center;border-left:2px solid var(--accent);background:var(--accent-light);color:var(--accent)">VARIANCE SUMMARY</th>
+    <th colspan="2" style="padding:5px 8px;background:var(--surface2)"></th>
+  </tr>
+  <tr style="background:var(--surface2);font-weight:600">
+    <th ${tl('min-width:150px')}>Vendor (AP)</th>
+    <th ${tl('min-width:110px;font-weight:400')}>Matched Fcst Vendor</th>
+    <th ${tl('min-width:80px')}>GL Code</th>
+    <th ${tl('min-width:100px;font-weight:400')}>GL Name</th>
+    <th ${tl('min-width:100px;font-weight:400')}>Department</th>
+    <th ${tl('min-width:70px;font-weight:400')}>CC</th>
+    <th ${tl('min-width:60px;border-right:2px solid var(--border);font-weight:400')}>BU</th>
+    <th ${tr('border-left:2px solid var(--border);min-width:90px;cursor:pointer')} onclick="sortAttn('actAvg')">${actHide?'▶ Actuals':'Avg/Mo Act'} <span id="si-actAvg">${sortIcon('actAvg')}</span></th>
+    ${actMonthThs}
+    <th ${tr('border-left:2px solid #bfdbfe;min-width:90px;cursor:pointer;color:var(--blue)')} onclick="sortAttn('fcstAvg')">${fcstHide?'▶ Forecast':'Avg/Mo Fcst'} <span id="si-fcstAvg">${sortIcon('fcstAvg')}</span></th>
+    ${fcstMonthThs}
+    <th ${tr('border-left:2px solid var(--accent);min-width:90px;cursor:pointer')} onclick="sortAttn('actTotal')">Total Act 12M <span id="si-actTotal">${sortIcon('actTotal')}</span></th>
+    <th ${tr('min-width:90px;cursor:pointer;color:var(--blue)')} onclick="sortAttn('fcstTotal')">Total Fcst 12M <span id="si-fcstTotal">${sortIcon('fcstTotal')}</span></th>
+    <th ${tr('min-width:85px;cursor:pointer')} onclick="sortAttn('variance')">Variance $ <span id="si-variance">${sortIcon('variance')}</span></th>
+    <th ${tr('min-width:70px;cursor:pointer')} onclick="sortAttn('varPct')">Variance % <span id="si-varPct">${sortIcon('varPct')}</span></th>
+    <th ${tr('min-width:90px')}>Direction</th>
+    <th ${tl('min-width:180px')}>Explanation</th>
+  </tr>`;
 
-  // Store row data in lookup map — avoids inline JSON in HTML
   ATTN_ROW_MAP={};
   items.forEach((d,idx)=>{ATTN_ROW_MAP[idx]=d;});
 
