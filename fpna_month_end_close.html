@@ -132,7 +132,9 @@
   .ms-footer{padding:6px 10px;border-top:1px solid var(--border);display:flex;gap:6px;}
   .ms-footer button{font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-family:inherit;}
   .ms-footer button:hover{background:var(--surface2);}
-  /* Needs Attention redesigned table */
+  .attn-act-col.collapsed,.attn-fcst-col.collapsed{display:none;}
+  .attn-act-group,.attn-fcst-group{white-space:nowrap;}
+
   .attn-grid{display:grid;gap:1px;background:var(--border);}
   .attn-period-col{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;}
   .spark-mini{display:flex;align-items:flex-end;gap:2px;height:32px;}
@@ -420,18 +422,62 @@
               <div class="ms-wrap" id="ms-attn-bu"><button class="ms-btn" onclick="toggleMS('ms-attn-bu')">BU <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-attn-bu')">All</button><button onclick="clearMS('ms-attn-bu')">None</button></div></div></div>
               <button class="btn btn-sm ml-auto" onclick="expAttn()">Export CSV</button>
             </div>
-            <div class="table-wrap">
-              <table style="font-size:11px">
-                <thead><tr>
-                  <th style="min-width:140px">Vendor (AP)</th><th style="min-width:120px">Matched Fcst Vendor</th><th>GL Code</th><th style="max-width:120px">GL Name</th><th style="max-width:100px">Department</th><th style="max-width:80px">CC</th><th style="max-width:60px">BU</th>
-                  <th class="td-r" style="color:var(--text3);min-width:68px">Act M-12</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-11</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-10</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-9</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-8</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-7</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-6</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-5</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-4</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-3</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-2</th><th class="td-r" style="color:var(--text3);min-width:68px">Act M-1</th>
-                  <th class="td-r" style="min-width:85px;font-weight:700;cursor:pointer" onclick="sortAttn('actAvg')">12-Mo Avg Act <span id="si-actAvg" style="font-size:10px">⇅</span></th>
-                  <th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+1</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+2</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+3</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+4</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+5</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+6</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+7</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+8</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+9</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+10</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+11</th><th class="td-r" style="color:var(--blue);min-width:68px">Fcst M+12</th>
-                  <th class="td-r" style="color:var(--blue);min-width:85px;font-weight:700;cursor:pointer" onclick="sortAttn('fcstAvg')">Avg Fcst <span id="si-fcstAvg" style="font-size:10px">⇅</span></th>
-                  <th class="td-r" style="min-width:80px;cursor:pointer" onclick="sortAttn('variance')">Variance $ <span id="si-variance" style="font-size:10px">⇅</span></th>
-                  <th class="td-r" style="min-width:70px;cursor:pointer" onclick="sortAttn('varPct')">Variance % <span id="si-varPct" style="font-size:10px">▼</span></th>
-                  <th style="min-width:90px">Direction</th><th style="min-width:160px">Explanation</th>
-                </tr></thead>
+            <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center">
+              <span style="font-size:12px;color:var(--text3)">Columns:</span>
+              <button class="btn btn-sm" onclick="toggleAttnCols('act')" id="btn-act-cols">▼ Actuals</button>
+              <button class="btn btn-sm" onclick="toggleAttnCols('fcst')" id="btn-fcst-cols">▼ Forecast</button>
+            </div>
+            <div class="table-wrap" style="overflow-x:auto;overflow-y:visible">
+              <table style="font-size:11px;min-width:max-content" id="attn-main-table">
+                <thead>
+                  <tr>
+                    <th rowspan="2" style="min-width:140px;vertical-align:bottom">Vendor (AP)</th>
+                    <th rowspan="2" style="min-width:120px;vertical-align:bottom">Matched Fcst Vendor</th>
+                    <th rowspan="2" style="vertical-align:bottom">GL Code</th>
+                    <th rowspan="2" style="max-width:120px;vertical-align:bottom">GL Name</th>
+                    <th rowspan="2" style="max-width:100px;vertical-align:bottom">Department</th>
+                    <th rowspan="2" style="max-width:80px;vertical-align:bottom">CC</th>
+                    <th rowspan="2" style="max-width:60px;vertical-align:bottom">BU</th>
+                    <th colspan="13" class="attn-act-group" style="text-align:center;background:var(--surface2);color:var(--text2);font-size:10px;letter-spacing:.05em;border-bottom:2px solid var(--border)">── ACTUALS (12 months) ──</th>
+                    <th colspan="13" class="attn-fcst-group" style="text-align:center;background:var(--blue-light);color:var(--blue);font-size:10px;letter-spacing:.05em;border-bottom:2px solid var(--blue)">── FORECAST (12 months) ──</th>
+                    <th rowspan="2" class="td-r" style="min-width:90px;cursor:pointer;vertical-align:bottom" onclick="sortAttn('actTotal')">Total Act 12M <span id="si-actTotal" style="font-size:10px">⇅</span></th>
+                    <th rowspan="2" class="td-r" style="min-width:90px;color:var(--blue);cursor:pointer;vertical-align:bottom" onclick="sortAttn('fcstTotal')">Total Fcst 12M <span id="si-fcstTotal" style="font-size:10px">⇅</span></th>
+                    <th rowspan="2" class="td-r" style="min-width:85px;cursor:pointer;vertical-align:bottom" onclick="sortAttn('variance')">Variance $ <span id="si-variance" style="font-size:10px">⇅</span></th>
+                    <th rowspan="2" class="td-r" style="min-width:70px;cursor:pointer;vertical-align:bottom" onclick="sortAttn('varPct')">Variance % <span id="si-varPct" style="font-size:10px">▼</span></th>
+                    <th rowspan="2" style="min-width:90px;vertical-align:bottom">Direction</th>
+                    <th rowspan="2" style="min-width:160px;vertical-align:bottom">Explanation</th>
+                  </tr>
+                  <tr id="attn-period-row">
+                    <!-- 12 act month headers + avg -->
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-12</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-11</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-10</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-9</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-8</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-7</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-6</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-5</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-4</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-3</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-2</th>
+                    <th class="td-r attn-act-col" style="color:var(--text3);min-width:68px;font-weight:400">M-1</th>
+                    <th class="td-r attn-act-group" style="min-width:85px;font-weight:700;cursor:pointer" onclick="sortAttn('actAvg')">Avg/Mo <span id="si-actAvg" style="font-size:10px">⇅</span></th>
+                    <!-- 12 fcst month headers + avg -->
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+1</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+2</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+3</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+4</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+5</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+6</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+7</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+8</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+9</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+10</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+11</th>
+                    <th class="td-r attn-fcst-col" style="color:var(--blue);min-width:68px;font-weight:400">M+12</th>
+                    <th class="td-r attn-fcst-group" style="color:var(--blue);min-width:85px;font-weight:700;cursor:pointer" onclick="sortAttn('fcstAvg')">Avg/Mo <span id="si-fcstAvg" style="font-size:10px">⇅</span></th>
+                  </tr>
+                </thead>
                 <tbody id="attn-drift-tbody"></tbody>
               </table>
             </div>
@@ -1423,6 +1469,19 @@ function _renderAttentionNow(){
   renderCodingIssues();
 }
 
+let ATTN_COLS_ACT=true,ATTN_COLS_FCST=true;
+function toggleAttnCols(type){
+  if(type==='act'){
+    ATTN_COLS_ACT=!ATTN_COLS_ACT;
+    document.querySelectorAll('.attn-act-col').forEach(el=>el.classList.toggle('collapsed',!ATTN_COLS_ACT));
+    document.getElementById('btn-act-cols').textContent=(ATTN_COLS_ACT?'▼':'▶')+' Actuals';
+  } else {
+    ATTN_COLS_FCST=!ATTN_COLS_FCST;
+    document.querySelectorAll('.attn-fcst-col').forEach(el=>el.classList.toggle('collapsed',!ATTN_COLS_FCST));
+    document.getElementById('btn-fcst-cols').textContent=(ATTN_COLS_FCST?'▼':'▶')+' Forecast';
+  }
+}
+
 let ATTN_SORT={col:'varPct',dir:-1}; // default: sort by variance % descending
 
 function sortAttn(col){
@@ -1454,7 +1513,14 @@ function renderDollarView(threshold,dirFilter){
   }
   if(deptF)items=items.filter(d=>deptF.includes(d.dept));
   if(glF)items=items.filter(d=>glF.includes(d.gl));
-  items.sort((a,b)=>ATTN_SORT.dir*(Math.abs(b[ATTN_SORT.col]||0)-Math.abs(a[ATTN_SORT.col]||0)));
+  items.sort((a,b)=>{
+    const getVal=d=>{
+      if(ATTN_SORT.col==='actTotal')return d.actAmts.reduce((s,v)=>s+v,0);
+      if(ATTN_SORT.col==='fcstTotal')return d.fcstAmts.reduce((s,v)=>s+v,0);
+      return d[ATTN_SORT.col]||0;
+    };
+    return ATTN_SORT.dir*(Math.abs(getVal(b))-Math.abs(getVal(a)));
+  });
 
   const unfav=items.filter(d=>!d.isFav).length;
   const fav=items.filter(d=>d.isFav).length;
@@ -1464,7 +1530,7 @@ function renderDollarView(threshold,dirFilter){
   document.getElementById('attn-spikes').textContent=fav;
   document.getElementById('attn-var-total').textContent=fmt(totalVar);
 
-  ['actAvg','fcstAvg','variance','varPct'].forEach(col=>{const el=document.getElementById('si-'+col);if(el)el.textContent=sortIcon(col);});
+  ['actAvg','fcstAvg','variance','varPct','actTotal','fcstTotal'].forEach(col=>{const el=document.getElementById('si-'+col);if(el)el.textContent=sortIcon(col);});
 
   // Update period headers once
   if(items.length>0){
@@ -1491,8 +1557,13 @@ function renderDollarView(threshold,dirFilter){
     const varClass=!d.isFav?'var-pos':'var-neg';
     const rowBg=d.glMismatch||d.deptMismatch?'background:var(--yellow-light)':'';
     // Use data-idx attribute for drill-down — no inline onclick or JSON
-    const actCells=d.actAmts.map((v,i)=>`<td class="td-r" style="font-size:10px;color:var(--text3)${v?';cursor:pointer;text-decoration:underline dotted':''}" ${v?`data-drill="act" data-idx="${idx}" data-pi="${i}" title="Click to see AP transactions"`:''}>${v?fmt(v):'—'}</td>`).join('');
-    const fcstCells=d.fcstAmts.map((v,i)=>`<td class="td-r" style="font-size:10px;color:var(--blue)${v?';cursor:pointer;text-decoration:underline dotted':''}" ${v?`data-drill="fcst" data-idx="${idx}" data-pi="${i}" title="Click to see forecast detail"`:''}>${v?fmt(v):'—'}</td>`).join('');
+    const actCells=d.actAmts.map((v,i)=>`<td class="td-r attn-act-col${ATTN_COLS_ACT?'':' collapsed'}" style="font-size:10px;color:var(--text3)${v?';cursor:pointer;text-decoration:underline dotted':''}" ${v?`data-drill="act" data-idx="${idx}" data-pi="${i}" title="Click to see AP transactions"`:''}>${v?fmt(v):'—'}</td>`).join('');
+    const fcstCells=d.fcstAmts.map((v,i)=>`<td class="td-r attn-fcst-col${ATTN_COLS_FCST?'':' collapsed'}" style="font-size:10px;color:var(--blue)${v?';cursor:pointer;text-decoration:underline dotted':''}" ${v?`data-drill="fcst" data-idx="${idx}" data-pi="${i}" title="Click to see forecast detail"`:''}>${v?fmt(v):'—'}</td>`).join('');
+    const actTotal=d.actAmts.reduce((s,v)=>s+v,0);
+    const fcstTotal=d.fcstAmts.reduce((s,v)=>s+v,0);
+    const totalVar=fcstTotal-actTotal;
+    const totalVarPct=actTotal!==0?(totalVar/Math.abs(actTotal)*100):0;
+    const totalVarClass=totalVar<0?'var-pos':'var-neg';
     return`<tr data-idx="${idx}" style="${rowBg}">
       <td style="font-weight:600;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.vendor)}">${esc(d.vendor)}</td>
       <td style="font-size:10px;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.fcst_vendor)}">${esc(d.fcst_vendor)}${mNote}<br><span style="font-size:9px">${Math.round(d.match_score*100)}%</span></td>
@@ -1502,11 +1573,13 @@ function renderDollarView(threshold,dirFilter){
       <td style="font-size:10px;color:var(--text3);max-width:80px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.cc)}">${esc(d.cc)}</td>
       <td style="font-size:10px;color:var(--text3)">${esc(d.bu)}</td>
       ${actCells}
-      <td class="td-r" style="font-weight:700;font-size:11px;cursor:pointer;text-decoration:underline dotted" data-drill="act-all" data-idx="${idx}" title="Click to see all AP transactions">${fmtF(d.actAvg)}</td>
+      <td class="td-r attn-act-group" style="font-weight:700;font-size:11px;cursor:pointer;text-decoration:underline dotted" data-drill="act-all" data-idx="${idx}" title="Click to see all AP transactions">${fmtF(d.actAvg)}</td>
       ${fcstCells}
-      <td class="td-r" style="font-weight:700;color:var(--blue);font-size:11px;cursor:pointer;text-decoration:underline dotted" data-drill="fcst-all" data-idx="${idx}" title="Click to see all forecast rows">${fmtF(d.fcstAvg)}</td>
-      <td class="td-r ${varClass}" style="font-weight:700;font-size:11px">${fmtF(d.variance)}</td>
-      <td class="td-r ${varClass}" style="font-weight:700;font-size:11px">${fmtP(d.varPct)}</td>
+      <td class="td-r attn-fcst-group" style="font-weight:700;color:var(--blue);font-size:11px;cursor:pointer;text-decoration:underline dotted" data-drill="fcst-all" data-idx="${idx}" title="Click to see all forecast rows">${fmtF(d.fcstAvg)}</td>
+      <td class="td-r" style="font-weight:700;font-size:11px">${fmtF(actTotal)}</td>
+      <td class="td-r" style="font-weight:700;color:var(--blue);font-size:11px">${fmtF(fcstTotal)}</td>
+      <td class="td-r ${totalVarClass}" style="font-weight:700;font-size:11px">${fmtF(totalVar)}</td>
+      <td class="td-r ${totalVarClass}" style="font-weight:700;font-size:11px">${fmtP(totalVarPct)}</td>
       <td>${dirBadge}</td>
       <td style="font-size:10px;color:var(--text2);max-width:160px">${d.why}</td>
     </tr>`;
