@@ -1235,7 +1235,7 @@ function renderAccruals(){
   let sugg=getAccSuggestions(period);
   const cF=selVal('acc-conf');if(cF)sugg=sugg.filter(s=>s.confidence===cF);
   sugg=msFilter(sugg,'ms-acc-vendor','vendor');sugg=msFilter(sugg,'ms-acc-dept','dept');sugg=msFilter(sugg,'ms-acc-gl','account');sugg=msFilter(sugg,'ms-acc-cc','cc');
-  const approved=sugg.filter(s=>ACC_DEC[period+'|||'+s.key]==='approved');
+  const approved=sugg.filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});
   const totS=sugg.reduce((s,r)=>s+r.suggested_amount,0);
   document.getElementById('acc-stats').style.display=sugg.length?'grid':'none';
   document.getElementById('acc-cnt').textContent=sugg.length;document.getElementById('acc-total').textContent=fmt(totS);
@@ -1248,7 +1248,7 @@ function renderAccruals(){
   if(!sugg.length){alert.style.display='block';alert.className='alert al-ok';alert.textContent=allP.indexOf(period)<2?'Need at least 3 months of history.':`No accrual gaps detected for ${period}.`;}else alert.style.display='none';
   document.getElementById('acc-exp-row').style.display=approved.length?'block':'none';
   document.getElementById('acc-list').innerHTML=sugg.map(s=>{
-    const dec=ACC_DEC[period+'|||'+s.key];const bc=s.confidence==='high'?'b-high':s.confidence==='medium'?'b-med':'b-low';
+    const decVal=ACC_DEC[period+'|||'+s.key];const dec=decVal==='approved'||decVal?.status==='approved'?'approved':decVal==='rejected'?'rejected':decVal;const bc=s.confidence==='high'?'b-high':s.confidence==='medium'?'b-med':'b-low';
     const fb=s.fcst_risk==='aligned'?'<span class="badge b-low">Fcst Aligned</span>':s.fcst_risk==='minor'?'<span class="badge b-med">Minor Fcst Gap</span>':s.fcst_risk==='major'?'<span class="badge b-high">Fcst Misaligned</span>':'<span class="badge b-none">No Fcst</span>';
     return`<div class="acc-card ${dec||''}" style="${s.gl_mismatch||s.dept_mismatch?'border:2px solid var(--yellow-border) !important;background:var(--yellow-light) !important;':''}">
       <div class="acc-top"><div class="acc-info">
@@ -1293,7 +1293,19 @@ function renderAccruals(){
   }).join('');
   requestAnimationFrame(()=>window.scrollTo(0,scrollY));
 }
-async function decide(p,k,d){const dk=p+'|||'+k;if(d===null)delete ACC_DEC[dk];else ACC_DEC[dk]=d;await save();renderAccruals();renderApproved();}
+async function decide(p,k,d){
+  const dk=p+'|||'+k;
+  if(d===null){
+    delete ACC_DEC[dk];
+  } else if(d==='approved'){
+    // Store full snapshot so Current Month Accruals always shows correct data
+    const sugg=getAccSuggestions(p).find(s=>s.key===k);
+    ACC_DEC[dk]=sugg?{status:'approved',snapshot:{...sugg,_period:p}}:'approved';
+  } else {
+    ACC_DEC[dk]=d;
+  }
+  await save();renderAccruals();renderApproved();
+}
 
 // ── NEEDS ATTENTION ───────────────────────────────────
 let ATTN_DRIFT_ALL=[], ATTN_CODING_ALL=[];
@@ -1691,7 +1703,8 @@ function expCoding(){
 }
 
 function renderApproved(){
-  const approvedEntries=Object.entries(ACC_DEC).filter(([k,v])=>v==='approved');
+  // Get all approved entries — handle both old string format and new snapshot format
+  const approvedEntries=Object.entries(ACC_DEC).filter(([k,v])=>v==='approved'||v?.status==='approved');
   const badge=document.getElementById('badge-approved');
   if(approvedEntries.length){badge.style.display='inline';badge.textContent=approvedEntries.length;}
   else{badge.style.display='none';}
@@ -1699,37 +1712,42 @@ function renderApproved(){
   document.getElementById('appr-content').style.display=approvedEntries.length?'block':'none';
   if(!approvedEntries.length)return;
 
-  // normVendor must match the one used in getAccSuggestions
   const normVend=v=>v.toUpperCase().replace(/\b(LLC|INC|CORP|LTD|CO|COMPANY|GROUP|THE|AND|PRIVATE|PVT|LIMITED|L\.L\.C|INC\.|CORP\.)\b/g,'').replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
 
   const rows=[];
-  // Group approved entries by period
-  const byPeriod={};
-  approvedEntries.forEach(([fullKey])=>{
+  approvedEntries.forEach(([fullKey,val])=>{
     const parts=fullKey.split('|||');
     const period=parts[0];
-    if(!byPeriod[period])byPeriod[period]=[];
-    byPeriod[period].push({fullKey,suggKey:parts.slice(1).join('|||')});
-  });
+    const suggKey=parts.slice(1).join('|||');
 
-  Object.entries(byPeriod).forEach(([period,entries])=>{
+    // NEW FORMAT: full snapshot stored
+    if(val?.status==='approved'&&val?.snapshot){
+      rows.push({...val.snapshot,_period:period,key:suggKey});
+      return;
+    }
+
+    // OLD FORMAT: try to find in current suggestions
     const suggs=getAccSuggestions(period);
-    entries.forEach(({fullKey,suggKey})=>{
-      // Try exact key match first
-      let sugg=suggs.find(s=>s.key===suggKey);
-      // Try normalized key match (handles LLC/INC variants)
-      if(!sugg){
-        const normKey=normVend(suggKey.split('|||')[0])+'|||'+suggKey.split('|||').slice(1).join('|||');
-        sugg=suggs.find(s=>normVend(s.vendor)+'|||'+s.account+'|||'+s.dept===normKey);
-      }
-      if(sugg){rows.push({...sugg,_period:period});}
-      else{
-        // Last resort: reconstruct from AP data
-        const [vendor,account,dept]=suggKey.split('|||');
-        const currAmt=AP.filter(r=>r.period===period&&(r.vendor===vendor||normVend(r.vendor)===normVend(vendor||''))&&r.account===account&&r.dept===dept).reduce((s,r)=>s+r.amount,0);
-        rows.push({vendor:vendor||suggKey,account:account||'',dept:dept||'',cc:'',_period:period,key:suggKey,curr_month:currAmt,prior_month:0,six_mo_avg:0,suggested_amount:0,fcst_amount:null,confidence:'—',gl_mismatch:false,dept_mismatch:false});
-      }
-    });
+    let sugg=suggs.find(s=>s.key===suggKey);
+    if(!sugg){
+      // Try normalized match
+      sugg=suggs.find(s=>{
+        const normS=normVend(s.vendor)+'|||'+s.account+'|||'+s.dept;
+        const normQ=normVend(suggKey.split('|||')[0])+'|||'+suggKey.split('|||').slice(1).join('|||');
+        return normS===normQ;
+      });
+    }
+    if(sugg){rows.push({...sugg,_period:period});return;}
+
+    // Last resort: reconstruct from AP
+    const vendor=suggKey.split('|||')[0];
+    const account=suggKey.split('|||')[1]||'';
+    const dept=suggKey.split('|||').slice(2).join('|||');
+    const currAmt=AP.filter(r=>r.period===period&&(normVend(r.vendor)===normVend(vendor))&&r.account===account&&r.dept===dept).reduce((s,r)=>s+r.amount,0);
+    const lbP=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort().filter(p=>p<period).slice(-6);
+    const histAmts=AP.filter(r=>lbP.includes(r.period)&&normVend(r.vendor)===normVend(vendor)&&r.account===account&&r.dept===dept).reduce((s,r)=>s+r.amount,0);
+    const histAvg=lbP.length?histAmts/lbP.length:0;
+    rows.push({vendor,account,dept,cc:'',_period:period,key:suggKey,curr_month:currAmt,prior_month:0,six_mo_avg:Math.round(histAvg),suggested_amount:Math.round(histAvg-currAmt),fcst_amount:null,confidence:'low',gl_mismatch:false,dept_mismatch:false});
   });
 
   const total=rows.reduce((s,r)=>s+(r.suggested_amount||0),0);
@@ -1755,7 +1773,7 @@ function renderApproved(){
       <td class="td-r">${s.fcst_amount!=null?fmtF(s.fcst_amount):'—'}</td>
       <td class="td-r" style="font-weight:700;color:var(--green)">${fmtF(s.suggested_amount||0)}</td>
       <td style="font-size:11px;color:var(--text3)">${s.fcst_amount!=null?'Fcst − Actuals':'Hist Avg − Actuals'}</td>
-      <td>${riskClass?`<span class="badge ${riskClass}">${s.confidence}</span>`:esc(s.confidence||'')}</td>
+      <td>${riskClass?`<span class="badge ${riskClass}">${s.confidence}</span>`:esc(s.confidence||'—')}</td>
       <td>${mismatchBadge}</td>
       <td><button class="btn btn-sm btn-red" onclick="unapprove('${esc(period)}','${esc(s.key)}')">Remove</button></td>
     </tr>`;
@@ -1770,7 +1788,7 @@ async function unapprove(period,key){
 
 function expApproved(){
   const period=document.getElementById('acc-period')?.value||'';
-  const approved=getAccSuggestions(period).filter(s=>ACC_DEC[period+'|||'+s.key]==='approved');
+  const approved=getAccSuggestions(period).filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});
   dlCSV([
     ['Period','Vendor','GL Code','Department','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Accrual Amount','Basis','Risk Level','Fcst Match Status']
   ].concat(approved.map(s=>[
@@ -1825,7 +1843,7 @@ function expActuals(){dlCSV([['Period','Subsidiary','Vendor','GL Code','Dept','C
 function expSOT(){dlCSV([['Period','Subsidiary','Posting Date','Vendor','GL Code','Dept','Cost Center','Entity','Class','Type','Invoice Type','Memo','Coupa PO','Budget ID','Amount USD']].concat(getSOTF().map(r=>[r.period,r.sub,r.posting,r.vendor,r.account,r.dept,r.cc,r.entity,r.cls,r.type,r.inv_type,r.memo,r.coupa,r.budget,r.amount])),'ap_source_of_truth.csv');}
 function expFcst(){const rows=[['GL Code','GL Name','BU','Cost Center','Dept','Vendor FP&A','Forecast','Actuals','Variance $','Variance %','Status','Commentary']];document.querySelectorAll('#fv-tbody tr').forEach(tr=>{const tds=[...tr.querySelectorAll('td')];if(tds.length>=11)rows.push(tds.slice(0,12).map(td=>{const ta=td.querySelector('textarea');return ta?ta.value:td.textContent.trim();}));});dlCSV(rows,'fcst_vs_actuals.csv');}
 function expFuture(){const rows=[[...document.querySelectorAll('#fut-thead th')].map(t=>t.textContent.trim())];document.querySelectorAll('#fut-tbody tr').forEach(tr=>rows.push([...tr.querySelectorAll('td')].map(td=>td.textContent.trim())));dlCSV(rows,'future_forecast.csv');}
-function expAccruals(){const period=selVal('acc-period');const approved=getAccSuggestions(period).filter(s=>ACC_DEC[period+'|||'+s.key]==='approved');dlCSV([['Period','Vendor','GL Code','Dept','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Forecast Remaining','Suggested Accrual','Confidence','Fcst Risk']].concat(approved.map(s=>[period,s.vendor,s.account,s.dept,s.cc,s.curr_month,s.prior_month,s.six_mo_avg,s.fcst_amount!==null?s.fcst_amount:'N/A',s.fcst_amount!==null?Math.max(0,s.fcst_amount-s.curr_month):'N/A',s.suggested_amount,s.confidence,s.fcst_risk])),'accruals_approved_'+period+'.csv');}
+function expAccruals(){const period=selVal('acc-period');const approved=getAccSuggestions(period).filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});dlCSV([['Period','Vendor','GL Code','Dept','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Forecast Remaining','Suggested Accrual','Confidence','Fcst Risk']].concat(approved.map(s=>[period,s.vendor,s.account,s.dept,s.cc,s.curr_month,s.prior_month,s.six_mo_avg,s.fcst_amount!==null?s.fcst_amount:'N/A',s.fcst_amount!==null?Math.max(0,s.fcst_amount-s.curr_month):'N/A',s.suggested_amount,s.confidence,s.fcst_risk])),'accruals_approved_'+period+'.csv');}
 
 // ── NAV ───────────────────────────────────────────────
 const PAGE_CFG={upload:{t:'Upload Data',s:'Load AP Details and Forecast exports from Adaptive / NetSuite'},actuals:{t:'AP Actuals',s:'12-month spend analysis — filter by any dimension'},fcst:{t:'Forecast vs Actuals',s:'Compare actuals against M8 forecast with GL-level variance commentary'},future:{t:'Future Forecast',s:'Upcoming months forecast — identify lines needing updates'},accruals:{t:'Accruals',s:'Month-end accrual recommendations with forecast risk scoring'},approved:{t:'Current Month Accruals',s:'Finalized approved accruals for the current close period — ready for JE posting'},attention:{t:'Needs Attention',s:'Items requiring action — forecast drift, accrual gaps, spend spikes'},sot:{t:'Source of Truth',s:'Complete 12-month AP actuals — single source of truth'}};
