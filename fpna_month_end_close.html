@@ -1691,46 +1691,71 @@ function expCoding(){
 }
 
 function renderApproved(){
-  const approvedKeys=Object.entries(ACC_DEC).filter(([k,v])=>v==='approved');
+  const approvedEntries=Object.entries(ACC_DEC).filter(([k,v])=>v==='approved');
   const badge=document.getElementById('badge-approved');
-  if(approvedKeys.length){badge.style.display='inline';badge.textContent=approvedKeys.length;}else badge.style.display='none';
+  if(approvedEntries.length){badge.style.display='inline';badge.textContent=approvedEntries.length;}
+  else{badge.style.display='none';}
+  document.getElementById('appr-empty').style.display=approvedEntries.length?'none':'block';
+  document.getElementById('appr-content').style.display=approvedEntries.length?'block':'none';
+  if(!approvedEntries.length)return;
 
-  // Group by period and get suggestions for each
-  const periodSet=new Set(approvedKeys.map(([k])=>k.split('|||')[0]));
-  const approved=[];
-  periodSet.forEach(period=>{
-    getAccSuggestions(period).filter(s=>ACC_DEC[period+'|||'+s.key]==='approved').forEach(s=>approved.push({...s,_period:period}));
+  // normVendor must match the one used in getAccSuggestions
+  const normVend=v=>v.toUpperCase().replace(/\b(LLC|INC|CORP|LTD|CO|COMPANY|GROUP|THE|AND|PRIVATE|PVT|LIMITED|L\.L\.C|INC\.|CORP\.)\b/g,'').replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
+
+  const rows=[];
+  // Group approved entries by period
+  const byPeriod={};
+  approvedEntries.forEach(([fullKey])=>{
+    const parts=fullKey.split('|||');
+    const period=parts[0];
+    if(!byPeriod[period])byPeriod[period]=[];
+    byPeriod[period].push({fullKey,suggKey:parts.slice(1).join('|||')});
   });
 
-  const has=approved.length>0;
-  document.getElementById('appr-empty').style.display=has?'none':'block';
-  document.getElementById('appr-content').style.display=has?'block':'none';
-  if(!has)return;
+  Object.entries(byPeriod).forEach(([period,entries])=>{
+    const suggs=getAccSuggestions(period);
+    entries.forEach(({fullKey,suggKey})=>{
+      // Try exact key match first
+      let sugg=suggs.find(s=>s.key===suggKey);
+      // Try normalized key match (handles LLC/INC variants)
+      if(!sugg){
+        const normKey=normVend(suggKey.split('|||')[0])+'|||'+suggKey.split('|||').slice(1).join('|||');
+        sugg=suggs.find(s=>normVend(s.vendor)+'|||'+s.account+'|||'+s.dept===normKey);
+      }
+      if(sugg){rows.push({...sugg,_period:period});}
+      else{
+        // Last resort: reconstruct from AP data
+        const [vendor,account,dept]=suggKey.split('|||');
+        const currAmt=AP.filter(r=>r.period===period&&(r.vendor===vendor||normVend(r.vendor)===normVend(vendor||''))&&r.account===account&&r.dept===dept).reduce((s,r)=>s+r.amount,0);
+        rows.push({vendor:vendor||suggKey,account:account||'',dept:dept||'',cc:'',_period:period,key:suggKey,curr_month:currAmt,prior_month:0,six_mo_avg:0,suggested_amount:0,fcst_amount:null,confidence:'—',gl_mismatch:false,dept_mismatch:false});
+      }
+    });
+  });
 
-  const total=approved.reduce((s,r)=>s+r.suggested_amount,0);
-  document.getElementById('appr-count').textContent=approved.length;
+  const total=rows.reduce((s,r)=>s+(r.suggested_amount||0),0);
+  document.getElementById('appr-count').textContent=rows.length;
   document.getElementById('appr-total').textContent=fmt(total);
-  document.getElementById('appr-high').textContent=approved.filter(s=>s.confidence==='high').length;
-  document.getElementById('appr-period').textContent=[...periodSet].sort().join(', ');
-  document.getElementById('appr-footer').textContent=`${approved.length} approved accruals totaling ${fmtF(total)}. Generated ${new Date().toLocaleDateString()}.`;
-  document.getElementById('appr-tbody').innerHTML=approved.map(s=>{
+  document.getElementById('appr-high').textContent=rows.filter(s=>s.confidence==='high').length;
+  document.getElementById('appr-period').textContent=[...new Set(rows.map(r=>r._period))].sort().join(', ');
+  document.getElementById('appr-footer').textContent=`${rows.length} approved accruals totaling ${fmtF(total)}. Generated ${new Date().toLocaleDateString()}.`;
+  document.getElementById('appr-tbody').innerHTML=rows.map(s=>{
     const period=s._period;
-    const riskClass=s.confidence==='high'?'b-high':s.confidence==='medium'?'b-med':'b-low';
+    const riskClass=s.confidence==='high'?'b-high':s.confidence==='medium'?'b-med':s.confidence==='low'?'b-low':'';
     const mismatchBadge=s.gl_mismatch?'<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL</span>':s.dept_mismatch?'<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept</span>':'<span class="badge b-on">✓</span>';
     return`<tr style="${s.gl_mismatch||s.dept_mismatch?'background:var(--yellow-light)':''}">
       <td style="font-weight:600">${esc(s.vendor)}</td>
       <td><span class="tag tag-gl">${esc(s.account)}</span></td>
-      <td class="td-m">${esc(s.account.split(':').slice(1).join(':').trim()||s.account)}</td>
-      <td class="td-m">${esc(s.dept)}</td>
-      <td class="td-m">${esc(s.cc)}</td>
+      <td class="td-m">${esc((s.account||'').split(':').slice(1).join(':').trim()||s.account)}</td>
+      <td class="td-m">${esc(s.dept||'')}</td>
+      <td class="td-m">${esc(s.cc||'')}</td>
       <td class="td-m">${esc(period)}</td>
-      <td class="td-r">${fmtF(s.curr_month)}</td>
-      <td class="td-r">${fmtF(s.prior_month)}</td>
-      <td class="td-r">${fmtF(s.six_mo_avg)}</td>
-      <td class="td-r">${s.fcst_amount!==null?fmtF(s.fcst_amount):'—'}</td>
-      <td class="td-r" style="font-weight:700;color:var(--green)">${fmtF(s.suggested_amount)}</td>
-      <td style="font-size:11px;color:var(--text3)">${s.fcst_amount!==null?'Fcst − Actuals':'Hist Avg − Actuals'}</td>
-      <td><span class="badge ${riskClass}">${s.confidence}</span></td>
+      <td class="td-r">${fmtF(s.curr_month||0)}</td>
+      <td class="td-r">${fmtF(s.prior_month||0)}</td>
+      <td class="td-r">${fmtF(s.six_mo_avg||0)}</td>
+      <td class="td-r">${s.fcst_amount!=null?fmtF(s.fcst_amount):'—'}</td>
+      <td class="td-r" style="font-weight:700;color:var(--green)">${fmtF(s.suggested_amount||0)}</td>
+      <td style="font-size:11px;color:var(--text3)">${s.fcst_amount!=null?'Fcst − Actuals':'Hist Avg − Actuals'}</td>
+      <td>${riskClass?`<span class="badge ${riskClass}">${s.confidence}</span>`:esc(s.confidence||'')}</td>
       <td>${mismatchBadge}</td>
       <td><button class="btn btn-sm btn-red" onclick="unapprove('${esc(period)}','${esc(s.key)}')">Remove</button></td>
     </tr>`;
