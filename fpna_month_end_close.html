@@ -490,7 +490,7 @@
           <div class="table-wrap">
             <table>
               <thead><tr>
-                <th>Vendor</th><th>GL Code</th><th>GL Name</th><th>Department</th><th>Cost Center</th>
+                <th>Vendor</th><th>GL Code</th><th>GL Name</th><th>Department</th><th>Cost Center</th><th>Period</th>
                 <th class="td-r">Current Month</th><th class="td-r">Prior Month</th><th class="td-r">6-Mo Avg</th>
                 <th class="td-r">Forecast</th><th class="td-r">Accrual Amount</th>
                 <th>Basis</th><th>Risk</th><th>Fcst Match</th><th>Action</th>
@@ -1546,8 +1546,8 @@ function renderDollarView(threshold,dirFilter){
     const totalVarPct=actTotal!==0?(totalVar/Math.abs(actTotal)*100):0;
     const totalVarClass=totalVar<0?'var-pos':'var-neg';
     return`<tr data-idx="${idx}" style="border-top:1px solid var(--border);${rowBg}">
-      <td style="${p};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:${d.glMismatch||d.deptMismatch?'var(--yellow-light)':'var(--surface)'};z-index:1;min-width:180px" title="${esc(d.vendor)}">${esc(d.vendor)}<br><span style="font-size:9px;color:var(--text3);font-weight:400">${esc(d.fcst_vendor)}${mNote} ${Math.round(d.match_score*100)}%</span></td>
-      <td style="${p};min-width:140px" title="${esc(d.gl)} — ${esc(d.gl_name)}"><span class="tag tag-gl" style="font-size:9px">${esc(d.gl)}</span><br><span style="font-size:9px;color:var(--text3)">${esc(d.gl_name.length>22?d.gl_name.slice(0,22)+'…':d.gl_name)}</span></td>
+      <td style="${p};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:${d.glMismatch||d.deptMismatch?'var(--yellow-light)':'var(--surface)'};z-index:1;min-width:180px" title="${esc(d.vendor)}">${esc(d.vendor)}${mNote}</td>
+      <td style="${p};min-width:140px;font-size:10px" title="${esc(d.gl)} — ${esc(d.gl_name)}"><span class="tag tag-gl" style="font-size:9px">${esc(d.gl)}</span> ${esc(d.gl_name.length>25?d.gl_name.slice(0,25)+'…':d.gl_name)}</td>
       <td style="${p};font-size:10px;color:var(--text3);max-width:130px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.dept)}">${esc(d.dept)}</td>
       <td style="${p};font-size:10px;color:var(--text3);border-right:2px solid var(--border);max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.bu)}">${esc(d.bu)}</td>
       ${actCells}
@@ -1691,26 +1691,30 @@ function expCoding(){
 }
 
 function renderApproved(){
-  // Get the currently selected close period from accruals tab
-  const period=document.getElementById('acc-period')?.value||[...new Set(AP.map(r=>r.period))].filter(Boolean).sort().slice(-1)[0]||'';
-  const allSugg=getAccSuggestions(period);
-  const approved=allSugg.filter(s=>ACC_DEC[period+'|||'+s.key]==='approved');
+  const approvedKeys=Object.entries(ACC_DEC).filter(([k,v])=>v==='approved');
+  const badge=document.getElementById('badge-approved');
+  if(approvedKeys.length){badge.style.display='inline';badge.textContent=approvedKeys.length;}else badge.style.display='none';
+
+  // Group by period and get suggestions for each
+  const periodSet=new Set(approvedKeys.map(([k])=>k.split('|||')[0]));
+  const approved=[];
+  periodSet.forEach(period=>{
+    getAccSuggestions(period).filter(s=>ACC_DEC[period+'|||'+s.key]==='approved').forEach(s=>approved.push({...s,_period:period}));
+  });
+
   const has=approved.length>0;
   document.getElementById('appr-empty').style.display=has?'none':'block';
   document.getElementById('appr-content').style.display=has?'block':'none';
-  // Update sidebar badge
-  const badge=document.getElementById('badge-approved');
-  if(approved.length){badge.style.display='inline';badge.textContent=approved.length;}else badge.style.display='none';
   if(!has)return;
+
   const total=approved.reduce((s,r)=>s+r.suggested_amount,0);
-  const high=approved.filter(s=>s.confidence==='high').length;
   document.getElementById('appr-count').textContent=approved.length;
   document.getElementById('appr-total').textContent=fmt(total);
-  document.getElementById('appr-high').textContent=high;
-  document.getElementById('appr-period').textContent=period?period+' — '+toML(period):'—';
-  document.getElementById('appr-footer').textContent=`${approved.length} approved accruals totaling ${fmtF(total)} for ${period}. Generated ${new Date().toLocaleDateString()}.`;
+  document.getElementById('appr-high').textContent=approved.filter(s=>s.confidence==='high').length;
+  document.getElementById('appr-period').textContent=[...periodSet].sort().join(', ');
+  document.getElementById('appr-footer').textContent=`${approved.length} approved accruals totaling ${fmtF(total)}. Generated ${new Date().toLocaleDateString()}.`;
   document.getElementById('appr-tbody').innerHTML=approved.map(s=>{
-    const basisLabel=s.fcst_amount!==null?'Fcst − Actuals':'Hist Avg − Actuals';
+    const period=s._period;
     const riskClass=s.confidence==='high'?'b-high':s.confidence==='medium'?'b-med':'b-low';
     const mismatchBadge=s.gl_mismatch?'<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL</span>':s.dept_mismatch?'<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept</span>':'<span class="badge b-on">✓</span>';
     return`<tr style="${s.gl_mismatch||s.dept_mismatch?'background:var(--yellow-light)':''}">
@@ -1719,19 +1723,19 @@ function renderApproved(){
       <td class="td-m">${esc(s.account.split(':').slice(1).join(':').trim()||s.account)}</td>
       <td class="td-m">${esc(s.dept)}</td>
       <td class="td-m">${esc(s.cc)}</td>
+      <td class="td-m">${esc(period)}</td>
       <td class="td-r">${fmtF(s.curr_month)}</td>
       <td class="td-r">${fmtF(s.prior_month)}</td>
       <td class="td-r">${fmtF(s.six_mo_avg)}</td>
       <td class="td-r">${s.fcst_amount!==null?fmtF(s.fcst_amount):'—'}</td>
       <td class="td-r" style="font-weight:700;color:var(--green)">${fmtF(s.suggested_amount)}</td>
-      <td style="font-size:11px;color:var(--text3)">${basisLabel}</td>
+      <td style="font-size:11px;color:var(--text3)">${s.fcst_amount!==null?'Fcst − Actuals':'Hist Avg − Actuals'}</td>
       <td><span class="badge ${riskClass}">${s.confidence}</span></td>
       <td>${mismatchBadge}</td>
       <td><button class="btn btn-sm btn-red" onclick="unapprove('${esc(period)}','${esc(s.key)}')">Remove</button></td>
     </tr>`;
   }).join('');
 }
-
 async function unapprove(period,key){
   delete ACC_DEC[period+'|||'+key];
   await save();
