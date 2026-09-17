@@ -613,33 +613,24 @@ async function save(){
 }
 
 async function load(){
-  // Try localStorage first (works across file renames)
-  const apLS=lsLoad(LS_KEY+'_ap');
-  if(apLS&&apLS.length>0){
-    AP=apLS;
-    FC=lsLoad(LS_KEY+'_fc')||[];
-    FC_PERIODS=lsLoad(LS_KEY+'_fcp')||[];
-    LOG=lsLoad(LS_KEY+'_log')||[];
-    ACC_DEC=lsLoad(LS_KEY+'_dec')||{};
-    COMMENTARY=lsLoad(LS_KEY+'_com')||{};
-    console.log(`Loaded from localStorage: ${AP.length} AP records`);
-  } else {
-    // Fall back to IndexedDB
-    try{
-      DB=await openDB();
-      const ap=await dbGet('AP');if(ap)AP=ap;
-      const fc=await dbGet('FC');if(fc)FC=fc;
-      const fcp=await dbGet('FC_PERIODS');if(fcp)FC_PERIODS=fcp;
-      const log=await dbGet('LOG');if(log)LOG=log;
-      const dec=await dbGet('ACC_DEC');if(dec)ACC_DEC=dec;
-      const com=await dbGet('COMMENTARY');if(com)COMMENTARY=com;
-      if(AP.length>0){
-        console.log(`Loaded from IndexedDB: ${AP.length} AP records`);
-        // Migrate to localStorage
-        save();
-      }
-    }catch(e){console.warn('IndexedDB load failed:',e);}
-  }
+  // Load AP/FC from IndexedDB (primary — no size limit)
+  try{
+    DB=await openDB();
+    const ap=await dbGet('AP');if(ap)AP=ap;
+    const fc=await dbGet('FC');if(fc)FC=fc;
+    const fcp=await dbGet('FC_PERIODS');if(fcp)FC_PERIODS=fcp;
+    const log=await dbGet('LOG');if(log)LOG=log;
+    const dec=await dbGet('ACC_DEC');if(dec)ACC_DEC=dec;
+    const com=await dbGet('COMMENTARY');if(com)COMMENTARY=com;
+    if(AP.length>0)console.log(`Loaded from IndexedDB: ${AP.length} AP records`);
+  }catch(e){console.warn('IndexedDB load failed:',e);}
+
+  // Always override ACC_DEC and COMMENTARY from localStorage if present
+  // (these are saved to localStorage on every approve/reject, so localStorage is always newest)
+  const lsDec=lsLoad(LS_KEY+'_dec');
+  if(lsDec&&Object.keys(lsDec).length>0){ACC_DEC=lsDec;console.log(`ACC_DEC loaded from localStorage: ${Object.keys(lsDec).length} entries`);}
+  const lsCom=lsLoad(LS_KEY+'_com');
+  if(lsCom)COMMENTARY=lsCom;
   buildVendorMatchTable();
   buildAttnData();
   refreshAll();
