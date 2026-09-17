@@ -193,7 +193,6 @@
       <button class="nav-item" onclick="goTo('fcst')"><span class="nav-icon">🎯</span>Fcst vs Actuals</button>
       <button class="nav-item" onclick="goTo('future')"><span class="nav-icon">📅</span>Future Forecast</button>
       <button class="nav-item" onclick="goTo('accruals')"><span class="nav-icon">✅</span>Accruals <span class="nav-badge" id="badge-accruals" style="display:none">0</span></button>
-      <button class="nav-item" onclick="goTo('approved')"><span class="nav-icon">📋</span>Current Month Accruals <span class="nav-badge green" id="badge-approved" style="display:none">0</span></button>
       <button class="nav-item" onclick="goTo('attention')"><span class="nav-icon">⚠️</span>Needs Attention <span class="nav-badge" id="badge-attn" style="display:none">0</span></button>
       <div class="nav-sec">Reports</div>
       <button class="nav-item" onclick="goTo('sot')"><span class="nav-icon">🗂</span>Source of Truth</button>
@@ -471,40 +470,7 @@
         </div>
       </div>
 
-      <!-- CURRENT MONTH ACCRUALS -->
-      <div class="page" id="page-approved">
-        <div id="appr-empty" class="empty" style="display:block">
-          <div class="empty-icon">📋</div>
-          <h3>No approved accruals yet</h3>
-          <p>Go to the Accruals tab and click Approve on entries to see them here.</p>
-        </div>
-        <div id="appr-content" style="display:none">
-          <div class="alert al-ok mb12">Finalized accruals approved for this close period — ready for JE posting.</div>
-          <div class="stats s4 mb12">
-            <div class="stat sv-green"><div class="stat-label">Approved</div><div class="stat-value" id="appr-count">0</div></div>
-            <div class="stat sv-accent"><div class="stat-label">Total Amount</div><div class="stat-value" id="appr-total">$0</div></div>
-            <div class="stat sv-red"><div class="stat-label">High Risk</div><div class="stat-value" id="appr-high">0</div></div>
-            <div class="stat"><div class="stat-label">Period(s)</div><div class="stat-value" id="appr-period">—</div></div>
-          </div>
-          <div class="filter-bar">
-            <button class="btn btn-primary btn-sm ml-auto" onclick="expApproved()">Export JE CSV</button>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr>
-                <th>Vendor</th><th>GL Code</th><th>GL Name</th><th>Department</th><th>Period</th>
-                <th class="td-r">Current Month</th><th class="td-r">Prior Month</th>
-                <th class="td-r">6-Mo Avg</th><th class="td-r">Forecast</th>
-                <th class="td-r" style="color:var(--green)">Accrual Amount</th>
-                <th>Risk</th><th>Action</th>
-              </tr></thead>
-              <tbody id="appr-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-            <!-- SOURCE OF TRUTH -->
+      <!-- SOURCE OF TRUTH -->
       <div class="page" id="page-sot">
         <div id="sot-empty" class="empty" style="display:none"><h3>Upload AP Details first</h3></div>
         <div id="sot-content">
@@ -900,7 +866,6 @@ function refreshAll(){
   renderAccruals();
   renderAttention();
   renderSOT();
-  renderApproved();
 }
 
 function updateUploadPage(){
@@ -1695,143 +1660,6 @@ function expCoding(){
   dlCSV(rows,'coding_issues_'+new Date().toISOString().slice(0,10)+'.csv');
 }
 
-function renderApproved(){
-  const empty=document.getElementById('appr-empty');
-  const content=document.getElementById('appr-content');
-  const tbody=document.getElementById('appr-tbody');
-  if(!empty||!content||!tbody)return;
-
-  // Collect all approved entries from ACC_DEC
-  const entries=[];
-  Object.entries(ACC_DEC).forEach(([k,v])=>{
-    const isApproved=v==='approved'||v?.status==='approved';
-    if(!isApproved)return;
-    const parts=k.split('|||');
-    const period=parts[0]||'';
-    const vendor=parts[1]||'';
-    const account=parts[2]||'';
-    const dept=parts.slice(3).join('|||');
-    // Get amounts from AP
-    const curr=AP.filter(r=>r.period===period&&r.vendor===vendor&&r.account===account&&r.dept===dept).reduce((s,r)=>s+r.amount,0);
-    const allP=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
-    const lb=allP.filter(p=>p<period).slice(-6);
-    const hist=AP.filter(r=>lb.includes(r.period)&&r.vendor===vendor&&r.account===account&&r.dept===dept).reduce((s,r)=>s+r.amount,0);
-    const avg=lb.length?hist/lb.length:0;
-    // Use snapshot if available
-    const snap=v?.snapshot||null;
-    entries.push({
-      period, vendor, account, dept,
-      curr_month: snap?snap.curr_month:curr,
-      prior_month: snap?snap.prior_month:0,
-      six_mo_avg: snap?snap.six_mo_avg:Math.round(avg),
-      fcst_amount: snap?snap.fcst_amount:null,
-      suggested_amount: snap?snap.suggested_amount:Math.round(avg-curr),
-      confidence: snap?snap.confidence:'low',
-      key: k.slice(period.length+3)
-    });
-  });
-
-  // Show empty or content
-  empty.style.display=entries.length?'none':'block';
-  content.style.display=entries.length?'block':'none';
-
-  // Update badge
-  const badge=document.getElementById('badge-approved');
-  if(badge){badge.style.display=entries.length?'inline':'none';badge.textContent=entries.length;}
-
-  if(!entries.length)return;
-
-  // Update stats
-  const total=entries.reduce((s,e)=>s+(e.suggested_amount||0),0);
-  document.getElementById('appr-count').textContent=entries.length;
-  document.getElementById('appr-total').textContent=fmtF(total);
-  document.getElementById('appr-high').textContent=entries.filter(e=>e.confidence==='high').length;
-  document.getElementById('appr-period').textContent=[...new Set(entries.map(e=>e.period))].sort().join(', ');
-
-  // Render rows
-  tbody.innerHTML=entries.map(e=>{
-    const rc=e.confidence==='high'?'b-high':e.confidence==='medium'?'b-med':'b-low';
-    const glName=(e.account||'').split(':').slice(1).join(':').trim()||'';
-    return`<tr>
-      <td style="font-weight:600">${esc(e.vendor)}</td>
-      <td><span class="tag tag-gl" style="font-size:10px">${esc(e.account)}</span></td>
-      <td class="td-m">${esc(glName)}</td>
-      <td class="td-m">${esc(e.dept)}</td>
-      <td class="td-m">${esc(e.period)}</td>
-      <td class="td-r">${fmtF(e.curr_month)}</td>
-      <td class="td-r">${fmtF(e.prior_month)}</td>
-      <td class="td-r">${fmtF(e.six_mo_avg)}</td>
-      <td class="td-r">${e.fcst_amount!=null?fmtF(e.fcst_amount):'—'}</td>
-      <td class="td-r" style="font-weight:700;color:var(--green)">${fmtF(e.suggested_amount)}</td>
-      <td><span class="badge ${rc}">${e.confidence}</span></td>
-      <td><button class="btn btn-sm btn-red" onclick="unapprove('${esc(e.period)}','${esc(e.key)}')">Remove</button></td>
-    </tr>`;
-  }).join('');
-}
-async function unapprove(period,key){
-  delete ACC_DEC[period+'|||'+key];
-  await save();
-  renderAccruals();
-  renderApproved();
-}
-
-function expApproved(){
-  const period=document.getElementById('acc-period')?.value||'';
-  const approved=getAccSuggestions(period).filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});
-  dlCSV([
-    ['Period','Vendor','GL Code','Department','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Accrual Amount','Basis','Risk Level','Fcst Match Status']
-  ].concat(approved.map(s=>[
-    period,s.vendor,s.account,s.dept,s.cc,
-    s.curr_month,s.prior_month,s.six_mo_avg,
-    s.fcst_amount!==null?s.fcst_amount:'N/A',
-    s.suggested_amount,
-    s.fcst_amount!==null?'Fcst - Actuals':'Hist Avg - Actuals',
-    s.confidence,
-    s.gl_mismatch?'GL Mismatch':s.dept_mismatch?'Dept Mismatch':'Clean Match'
-  ])),'current_month_accruals_'+period+'.csv');
-}
-
-function getSOTF(){
-  let d=[...AP];
-  const sv=id=>document.getElementById(id)?.value||'';const srch=(sv('sot-search')||'').toLowerCase();
-  if(sv('sot-period'))d=d.filter(r=>r.period===sv('sot-period'));
-  if(sv('sot-sub'))d=d.filter(r=>r.sub===sv('sot-sub'));
-  if(sv('sot-dept'))d=d.filter(r=>r.dept===sv('sot-dept'));
-  if(sv('sot-vendor'))d=d.filter(r=>r.vendor===sv('sot-vendor'));
-  if(sv('sot-gl'))d=d.filter(r=>r.account===sv('sot-gl'));
-  if(sv('sot-cc'))d=d.filter(r=>r.cc===sv('sot-cc'));
-  if(sv('sot-type'))d=d.filter(r=>r.type===sv('sot-type'));
-  if(srch)d=d.filter(r=>r.vendor.toLowerCase().includes(srch)||r.memo.toLowerCase().includes(srch)||r.account.toLowerCase().includes(srch));
-  return d;
-}
-function renderSOT(){
-  const has=AP.length>0;
-  document.getElementById('sot-empty').style.display=has?'none':'block';
-  document.getElementById('sot-content').style.display=has?'block':'none';
-  if(!has)return;
-  popSel('sot-period',[...new Set(AP.map(r=>r.period))].filter(Boolean).sort());
-  popSel('sot-sub',[...new Set(AP.map(r=>r.sub))]);
-  popSel('sot-dept',[...new Set(AP.map(r=>r.dept))]);
-  popSel('sot-vendor',[...new Set(AP.map(r=>r.vendor))]);
-  popSel('sot-gl',[...new Set(AP.map(r=>r.account))]);
-  popSel('sot-cc',[...new Set(AP.map(r=>r.cc))]);
-  popSel('sot-type',[...new Set(AP.map(r=>r.type))]);
-  const d=getSOTF();const tot=d.reduce((s,r)=>s+r.amount,0);
-  document.getElementById('sot-tot').textContent=fmt(tot);
-  document.getElementById('sot-txns').textContent=d.length.toLocaleString();
-  document.getElementById('sot-vends').textContent=new Set(d.map(r=>r.vendor)).size;
-  document.getElementById('sot-gls').textContent=new Set(d.map(r=>r.account)).size;
-  const shown=d.slice(0,1000);
-  document.getElementById('sot-lbl').textContent=`Showing ${shown.length.toLocaleString()} of ${d.length.toLocaleString()} records`;
-  document.getElementById('sot-tbody').innerHTML=shown.map(r=>`<tr><td>${esc(r.period)}</td><td class="td-m">${esc(r.sub)}</td><td class="td-m">${esc(r.posting)}</td><td style="font-weight:600">${esc(r.vendor)}</td><td><span class="tag tag-gl">${esc(r.account)}</span></td><td class="td-m">${esc(r.dept)}</td><td class="td-m">${esc(r.cc)}</td><td class="td-m">${esc(r.entity)}</td><td class="td-m">${esc(r.sub)}</td><td class="td-m">${esc(r.cls)}</td><td class="td-m">${esc(r.type)}</td><td class="td-m">${esc(r.inv_type)}</td><td class="td-m" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.memo)}">${esc(r.memo)}</td><td class="td-m">${esc(r.coupa)}</td><td class="td-m">${esc(r.budget)}</td><td class="td-r">${fmtF(r.amount)}</td></tr>`).join('');
-}
-
-// ── EXPORTS ───────────────────────────────────────────
-const dlCSV=(rows,fn)=>{const csv=rows.map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=fn;a.click();};
-function expActuals(){dlCSV([['Period','Subsidiary','Vendor','GL Code','Dept','Cost Center','Entity','Class','Type','Memo','Amount USD']].concat(getAPF().map(r=>[r.period,r.sub,r.vendor,r.account,r.dept,r.cc,r.entity,r.cls,r.type,r.memo,r.amount])),'ap_actuals.csv');}
-function expSOT(){dlCSV([['Period','Subsidiary','Posting Date','Vendor','GL Code','Dept','Cost Center','Entity','Class','Type','Invoice Type','Memo','Coupa PO','Budget ID','Amount USD']].concat(getSOTF().map(r=>[r.period,r.sub,r.posting,r.vendor,r.account,r.dept,r.cc,r.entity,r.cls,r.type,r.inv_type,r.memo,r.coupa,r.budget,r.amount])),'ap_source_of_truth.csv');}
-function expFcst(){const rows=[['GL Code','GL Name','BU','Cost Center','Dept','Vendor FP&A','Forecast','Actuals','Variance $','Variance %','Status','Commentary']];document.querySelectorAll('#fv-tbody tr').forEach(tr=>{const tds=[...tr.querySelectorAll('td')];if(tds.length>=11)rows.push(tds.slice(0,12).map(td=>{const ta=td.querySelector('textarea');return ta?ta.value:td.textContent.trim();}));});dlCSV(rows,'fcst_vs_actuals.csv');}
-function expFuture(){const rows=[[...document.querySelectorAll('#fut-thead th')].map(t=>t.textContent.trim())];document.querySelectorAll('#fut-tbody tr').forEach(tr=>rows.push([...tr.querySelectorAll('td')].map(td=>td.textContent.trim())));dlCSV(rows,'future_forecast.csv');}
 function expAccruals(){const period=selVal('acc-period');const approved=getAccSuggestions(period).filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});dlCSV([['Period','Vendor','GL Code','Dept','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Forecast Remaining','Suggested Accrual','Confidence','Fcst Risk']].concat(approved.map(s=>[period,s.vendor,s.account,s.dept,s.cc,s.curr_month,s.prior_month,s.six_mo_avg,s.fcst_amount!==null?s.fcst_amount:'N/A',s.fcst_amount!==null?Math.max(0,s.fcst_amount-s.curr_month):'N/A',s.suggested_amount,s.confidence,s.fcst_risk])),'accruals_approved_'+period+'.csv');}
 
 // ── NAV ───────────────────────────────────────────────
@@ -1848,8 +1676,7 @@ function goTo(page){
   document.getElementById('page-sub').textContent=cfg.s||'';
   // Render after page is visible
   setTimeout(()=>{
-    if(page==='approved')renderApproved();
-    else if(page==='attention'){buildAttnData();renderAttention();}
+    if(page==='attention'){buildAttnData();renderAttention();}
     else if(page==='accruals')renderAccruals();
   },0);
 }
