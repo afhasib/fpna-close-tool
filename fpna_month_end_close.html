@@ -1849,10 +1849,12 @@ function goTo(page){
   const cfg=PAGE_CFG[page]||{};
   document.getElementById('page-title').textContent=cfg.t||'';
   document.getElementById('page-sub').textContent=cfg.s||'';
-  // Re-render tab content when navigating to it
-  if(page==='approved')renderApproved();
-  if(page==='attention'){buildAttnData();renderAttention();}
-  if(page==='accruals')renderAccruals();
+  // Render after page is visible
+  setTimeout(()=>{
+    if(page==='approved')renderApproved();
+    else if(page==='attention'){buildAttnData();renderAttention();}
+    else if(page==='accruals')renderAccruals();
+  },0);
 }
 load();
 </script>
