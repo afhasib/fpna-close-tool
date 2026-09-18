@@ -440,8 +440,9 @@
                 <tbody id="attn-drift-tbody"></tbody>
               </table>
             </div>
+          </div>
 
-          <!-- CODING VIEW -->          <!-- CODING VIEW -->
+          <!-- CODING VIEW -->
           <div id="attn-coding-view" style="display:none">
             <div class="stats s3 mb12">
               <div class="stat sv-yellow"><div class="stat-label">Coding Issues Found</div><div class="stat-value" id="attn-gaps">—</div></div>
@@ -1284,7 +1285,7 @@ async function decide(p,k,d){
 }
 
 // ── NEEDS ATTENTION ───────────────────────────────────
-let ATTN_DRIFT_ALL=[], ATTN_CODING_ALL=[];
+let ATTN_DRIFT_ALL=[], ATTN_CODING_ALL=[], APPROVED_ROWS=[];
 
 function switchAttnTab(tab){
   const isDollar=tab==='dollar';
@@ -1674,15 +1675,28 @@ function drillForecastMulti(fcstVendor,gl,apDept,periods){
 
 function renderApproved(){
   const approved=[];
+  const suggCache={};
   Object.entries(ACC_DEC).forEach(([k,v])=>{
     if(v!=='approved'&&v?.status!=='approved')return;
     const parts=k.split('|||');
     if(parts.length<3)return;
-    const period=parts[0],vendor=parts[1],account=parts[2],dept=parts.slice(3).join('|||');
-    const snap=v?.snapshot||null;
-    const curr=snap?snap.curr_month:AP.filter(r=>r.period===period&&r.vendor===vendor&&r.account===account&&r.dept===dept).reduce((s,r)=>s+r.amount,0);
-    approved.push({period,vendor,account,dept,curr,avg:snap?.six_mo_avg||0,sugg:snap?.suggested_amount||0,fcst:snap?.fcst_amount??null,conf:snap?.confidence||'low',key:parts.slice(1).join('|||')});
+    const period=parts[0],normVendor=parts[1],account=parts[2],dept=parts.slice(3).join('|||');
+    const key=parts.slice(1).join('|||');
+    // Decisions saved before snapshots existed are the bare string 'approved' — rebuild
+    // those from the live suggestion list so they still show real amounts, not zeros.
+    let src=v?.snapshot||null;
+    if(!src){
+      if(!suggCache[period])suggCache[period]=getAccSuggestions(period);
+      src=suggCache[period].find(s=>s.key===key)||null;
+    }
+    approved.push({period,
+      vendor:src?.vendor||normVendor,account:src?.account||account,dept:src?.dept||dept,cc:src?.cc||'',
+      curr:src?.curr_month||0,prior:src?.prior_month||0,avg:src?.six_mo_avg||0,
+      sugg:src?.suggested_amount||0,fcst:src?.fcst_amount??null,
+      conf:src?.confidence||'low',risk:src?.fcst_risk||'unknown',key});
   });
+  approved.sort((a,b)=>a.period.localeCompare(b.period)||b.sugg-a.sugg);
+  APPROVED_ROWS=approved;
   const badge=document.getElementById('badge-approved');
   if(badge){badge.style.display=approved.length?'inline':'none';if(approved.length)badge.textContent=approved.length;}
   document.getElementById('appr-empty').style.display=approved.length?'none':'block';
@@ -1697,6 +1711,7 @@ function renderApproved(){
     <td class="td-m">${esc(e.dept)}</td>
     <td class="td-m">${esc(e.period)}</td>
     <td class="td-r">${fmtF(e.curr)}</td>
+    <td class="td-r">${fmtF(e.prior)}</td>
     <td class="td-r">${fmtF(e.avg)}</td>
     <td class="td-r">${e.fcst!=null?fmtF(e.fcst):'—'}</td>
     <td class="td-r" style="font-weight:700;color:var(--green)">${fmtF(e.sugg)}</td>
@@ -1710,6 +1725,20 @@ async function removeApproved(period,key){
   await save();
   renderAccruals();
   renderApproved();
+}
+
+function dlCSV(rows,name){
+  const cell=v=>{const s=v===null||v===undefined?'':String(v);return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
+  const blob=new Blob([rows.map(r=>r.map(cell).join(',')).join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);const a=document.createElement('a');
+  a.href=url;a.download=name;document.body.appendChild(a);a.click();
+  document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+
+function expApproved(){
+  const rows=[['Period','Vendor','GL Code','GL Name','Department','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Accrual $','Confidence','Fcst Risk']];
+  APPROVED_ROWS.forEach(e=>rows.push([e.period,e.vendor,e.account,(e.account||'').split(':').slice(1).join(':').trim(),e.dept,e.cc,e.curr,e.prior,e.avg,e.fcst!=null?e.fcst:'N/A',e.sugg,e.conf,e.risk]));
+  dlCSV(rows,'approved_accruals_'+new Date().toISOString().slice(0,10)+'.csv');
 }
 
 function expCoding(){
