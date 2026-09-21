@@ -1060,15 +1060,19 @@ function buildVendorMatchTable(){
   console.log(`Vendor match table: ${Object.keys(VENDOR_MATCH_CACHE).length} matches`);
 }
 
-function getFcstForVendor(apVendor,glCode,dept,period){
-  const key=apVendor+'||'+glCode+'||'+dept;
-  let match=VENDOR_MATCH_CACHE[key];
+// variants: every raw AP vendor spelling seen for this combo. A vendor renamed
+// mid-year (AWS LLC -> AWS INC) is one vendor, and Adaptive carries the forecast
+// under whichever name is current, so try them all before giving up.
+function getFcstForVendor(apVendor,glCode,dept,period,variants){
+  const names=[apVendor,...(variants||[])].filter(Boolean);
+  let match=null;
+  for(const n of names){const m=VENDOR_MATCH_CACHE[n+'||'+glCode+'||'+dept];if(m&&(!match||(m.score||0)>(match.score||0)))match=m;}
   // Fallback: normalized vendor name lookup (handles CORP./CORP, INC./INC variants)
   if(!match){
-    const normAP=normalize(apVendor);
+    const norms=new Set(names.map(normalize));
     for(const [k,v] of Object.entries(VENDOR_MATCH_CACHE)){
       const parts=k.split('||');
-      if(parts[1]===glCode&&parts[2]===dept&&normalize(parts[0])===normAP){match=v;break;}
+      if(parts[1]===glCode&&parts[2]===dept&&norms.has(normalize(parts[0]))){match=v;break;}
     }
   }
   if(!match)return{amount:null,vendor:null,score:0,fcst_dept:null,gl_mismatch:false,dept_mismatch:false,no_dept_match:false};
@@ -1177,21 +1181,35 @@ function getAccSuggestions(targetP){
     const nameChanged=currName&&currName!==combo.vendor&&normVendor(currName)===normVendor(combo.vendor);
     const histNames=[...combo.vendorNames].join(' / ');
     // Fuzzy vendor match: try vendor-level first (90%+ name similarity + same GL)
-    const vendorMatch=getFcstForVendor(combo.vendor,combo.account,combo.dept,targetP);
+    const vendorMatch=getFcstForVendor(combo.vendor,combo.account,combo.dept,targetP,[...combo.vendorNames]);
     const fcstAmt=vendorMatch.amount!==null?vendorMatch.amount:null;
     const fcstVendorName=vendorMatch.vendor;const fcstMatchScore=vendorMatch.score;const fcstDeptScore=vendorMatch.dept_match_score||0;
     const glMismatch=vendorMatch.gl_mismatch||false;const deptMismatch=vendorMatch.dept_mismatch||false;const apGL=vendorMatch.ap_gl||null;const fcstGL=vendorMatch.fcst_gl||null;const fcstGLName=vendorMatch.fcst_gl_name||null;
     let fcstRisk='unknown';
     if(fcstAmt!==null){const d=Math.abs(currAmt-fcstAmt)/Math.max(Math.abs(fcstAmt),1);fcstRisk=d<0.15?'aligned':d<0.4?'minor':'major';}
-    const gap=avg-currAmt;if(gap<250)return;
-    // Suggested accrual = forecast - actuals (clean match only)
-    // Fall back to hist avg - actuals when no forecast or coding mismatch
-    const suggestedAccrual=(fcstAmt!==null&&!glMismatch&&!deptMismatch)?Math.round(fcstAmt-currAmt):Math.round(gap);
-    // Suppress if actuals already met or exceeded forecast (no accrual needed)
-    if(fcstAmt!==null&&!glMismatch&&!deptMismatch&&fcstAmt<=currAmt)return;
+    // FORECAST-FIRST GATE. Where Adaptive carries a clean forecast for this
+    // vendor/GL/dept, forecast - actuals decides whether an accrual is needed; the
+    // historical run-rate is irrelevant. History is only the fallback for vendors
+    // Adaptive has no forecast line for. Under $250 either way is de minimis.
+    const histGap=avg-currAmt;
+    const cleanFcst=fcstAmt!==null&&!glMismatch&&!deptMismatch;
+    const gateAmount=cleanFcst?fcstAmt-currAmt:histGap;
+    if(gateAmount<250)return;
+    const suggestedAccrual=Math.round(gateAmount);
+    const accrualBasis=cleanFcst?'forecast':'history';
+    // No usable Adaptive forecast for this line — accrual falls back to history and
+    // the row is flagged so the analyst can load the missing forecast into Adaptive.
+    const fcstMissing=!cleanFcst&&!glMismatch&&!deptMismatch;
+    const fcstMissingReason=!fcstMissing?null:!vendorMatch.vendor?'vendor-absent':vendorMatch.no_dept_match?'dept-ambiguous':'no-period-amount';
+    // AP and Adaptive spell this vendor differently — matched on similarity, not an
+    // exact string, so the analyst should confirm the alignment is right.
+    const rawNm=s=>String(s||'').toUpperCase().replace(/\s+/g,' ').trim();
+    const apRawNames=new Set([...combo.vendorNames,currName].map(rawNm));
+    const vendorNameMismatch=!!vendorMatch.vendor&&!apRawNames.has(rawNm(vendorMatch.vendor));
     let confidence='low';
     if(fcstRisk==='aligned')confidence='low';else if(freq>=0.83&&Math.abs(avg)>1000)confidence='high';else if(freq>=0.5)confidence='medium';
-    suggestions.push({key,vendor:combo.vendor,currVendorName:currName,nameChanged,histNames,account:combo.account,dept:combo.dept,cc:combo.cc,suggested_amount:suggestedAccrual,curr_month:currAmt,prior_month:priorAmt,six_mo_avg:Math.round(avg),frequency:freq,periods_seen:n,lookback_count:lb.length,confidence,fcst_risk:fcstRisk,fcst_amount:fcstAmt,fcst_vendor:fcstVendorName,fcst_match_score:fcstMatchScore,fcst_dept:vendorMatch.fcst_dept||null,fcst_dept_score:fcstDeptScore,gl_mismatch:glMismatch,dept_mismatch:deptMismatch,ap_gl:apGL,fcst_gl:fcstGL,fcst_gl_name:fcstGLName});
+    suggestions.push({key,vendor:combo.vendor,currVendorName:currName,nameChanged,histNames,account:combo.account,dept:combo.dept,cc:combo.cc,suggested_amount:suggestedAccrual,curr_month:currAmt,prior_month:priorAmt,six_mo_avg:Math.round(avg),frequency:freq,periods_seen:n,lookback_count:lb.length,confidence,fcst_risk:fcstRisk,fcst_amount:fcstAmt,fcst_vendor:fcstVendorName,fcst_match_score:fcstMatchScore,fcst_dept:vendorMatch.fcst_dept||null,fcst_dept_score:fcstDeptScore,gl_mismatch:glMismatch,dept_mismatch:deptMismatch,no_dept_match:vendorMatch.no_dept_match||false,ap_gl:apGL,fcst_gl:fcstGL,fcst_gl_name:fcstGLName,
+      accrual_basis:accrualBasis,hist_gap:Math.round(histGap),fcst_missing:fcstMissing,fcst_missing_reason:fcstMissingReason,vendor_name_mismatch:vendorNameMismatch,ap_vendor_names:[...apRawNames].join(' / ')});
   });
   const ord={high:0,medium:1,low:2};
   return suggestions.sort((a,b)=>b.suggested_amount-a.suggested_amount);
@@ -1227,12 +1245,14 @@ function renderAccruals(){
   document.getElementById('acc-list').innerHTML=sugg.map(s=>{
     const decVal=ACC_DEC[period+'|||'+s.key];const dec=decVal==='approved'||decVal?.status==='approved'?'approved':decVal==='rejected'?'rejected':decVal;const bc=s.confidence==='high'?'b-high':s.confidence==='medium'?'b-med':'b-low';
     const fb=s.fcst_risk==='aligned'?'<span class="badge b-low">Fcst Aligned</span>':s.fcst_risk==='minor'?'<span class="badge b-med">Minor Fcst Gap</span>':s.fcst_risk==='major'?'<span class="badge b-high">Fcst Misaligned</span>':'<span class="badge b-none">No Fcst</span>';
-    return`<div class="acc-card ${dec||''}" style="${s.gl_mismatch||s.dept_mismatch?'border:2px solid var(--yellow-border) !important;background:var(--yellow-light) !important;':''}">
+    // Highlight priority: coding mismatch (yellow) > no Adaptive forecast (blue) > vendor name aligned by similarity (purple)
+    const hl=s.gl_mismatch||s.dept_mismatch?'yellow':s.fcst_missing?'blue':s.vendor_name_mismatch?'purple':'';
+    return`<div class="acc-card ${dec||''}" style="${hl?`border:2px solid var(--${hl}-border) !important;background:var(--${hl}-light) !important;`:''}">
       <div class="acc-top"><div class="acc-info">
       <div class="acc-vendor">${esc(s.vendor)} <span class="tag tag-gl">${esc(s.account)}</span>${s.nameChanged?`<span class="badge" style="background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border);margin-left:6px">⚠ Name Changed</span>`:''}
       </div>
       ${s.nameChanged?`<div style="font-size:11px;color:var(--yellow);margin-bottom:4px;font-weight:500">⚠ Vendor name changed: historical name "<strong>${esc(s.histNames)}</strong>" → current period name "<strong>${esc(s.currVendorName)}</strong>". Same vendor — actuals combined. Verify in NetSuite.</div>`:''}
-      <div class="acc-meta"><span class="badge ${bc}">${s.confidence} risk</span>${fb}${s.gl_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL Mismatch — Review Coding</span>`:s.dept_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept Mismatch — Review Coding</span>`:''}<span>Dept: ${esc(s.dept)||'—'}</span><span>${s.periods_seen}/${s.lookback_count} months (${Math.round(s.frequency*100)}%)</span>${s.cc?`<span>CC: ${esc(s.cc)}</span>`:''}</div>
+      <div class="acc-meta"><span class="badge ${bc}">${s.confidence} risk</span>${fb}${s.gl_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL Mismatch — Review Coding</span>`:s.dept_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept Mismatch — Review Coding</span>`:''}${s.fcst_missing?`<span class="badge" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-border)">📋 Not in Adaptive — Add Forecast</span>`:''}${s.vendor_name_mismatch?`<span class="badge" style="background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border)">⚠ Vendor Name Not Exact</span>`:''}<span>Dept: ${esc(s.dept)||'—'}</span><span>${s.periods_seen}/${s.lookback_count} months (${Math.round(s.frequency*100)}%)</span>${s.cc?`<span>CC: ${esc(s.cc)}</span>`:''}</div>
       <div class="acc-amounts" style="grid-template-columns:repeat(5,1fr)">
         <div class="acc-amt-cell"><div class="acc-amt-label">Current Month</div><div class="acc-amt-val ${s.curr_month>0&&s.curr_month<s.six_mo_avg*0.5?'highlight':''}">${fmtF(s.curr_month)}</div></div>
         <div class="acc-amt-cell"><div class="acc-amt-label">Prior Month</div><div class="acc-amt-val">${fmtF(s.prior_month)}</div></div>
@@ -1244,12 +1264,12 @@ function renderAccruals(){
             :s.dept_mismatch&&s.no_dept_match?`<div style="font-size:9px;color:var(--yellow);margin-top:2px;font-weight:600">⚠ Multiple dept rows — no match</div>`
             :s.dept_mismatch?`<div style="font-size:9px;color:var(--yellow);margin-top:2px;font-weight:600">⚠ Dept mismatch</div>`
             :s.fcst_vendor?`<div style="font-size:9px;color:var(--blue);margin-top:2px" title="Matched to: ${esc(s.fcst_vendor)}">Matched: ${esc(s.fcst_vendor.length>22?s.fcst_vendor.slice(0,22)+'…':s.fcst_vendor)} (${Math.round((s.fcst_match_score||0)*100)}%)</div>`
-            :`<div style="font-size:9px;color:var(--text3);margin-top:2px">No vendor match found</div>`}
+            :`<div style="font-size:9px;color:var(--blue);margin-top:2px;font-weight:600">Not in Adaptive</div>`}
         </div>
         <div class="acc-amt-cell" style="background:var(--accent-light);border-radius:var(--rsm)">
           <div class="acc-amt-label" style="color:var(--accent)">Suggested Accrual</div>
           <div class="acc-amt-val" style="color:var(--accent)">${fmtF(s.suggested_amount)}</div>
-          <div style="font-size:9px;color:var(--text3);margin-top:2px">${s.fcst_amount!==null?'Fcst − Actuals':'Hist avg − Actuals'}</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:2px">${s.accrual_basis==='forecast'?'Fcst − Actuals':'Hist avg − Actuals'}</div>
         </div>
       </div>
       <div style="margin-top:8px;font-size:11px;color:var(--text3);display:flex;gap:16px;flex-wrap:wrap">
@@ -1261,8 +1281,13 @@ function renderAccruals(){
             : `<span><strong>Fcst vendor match:</strong> "${esc(s.fcst_vendor)}" (${Math.round((s.fcst_match_score||0)*100)}% name sim) &nbsp;·&nbsp; <strong>Fcst dept:</strong> ${esc(s.fcst_dept||'—')} (dept match: ${Math.round((s.fcst_dept_score||0)*100)}%) &nbsp;·&nbsp; <strong>Fcst:</strong> ${fmtF(s.fcst_amount)} &nbsp;·&nbsp; <strong>Actuals so far:</strong> ${fmtF(s.curr_month)} &nbsp;·&nbsp; <strong>Remaining:</strong> ${fmtF(s.fcst_amount-s.curr_month)} &nbsp;·&nbsp; ${s.fcst_risk==='aligned'?'Forecast aligned — low accrual risk.':s.fcst_risk==='minor'?'Minor gap vs forecast.':'Actuals significantly below forecast — review accrual.'}</span>`
           : s.fcst_vendor&&s.no_dept_match
           ? `<span style="color:var(--yellow)"><strong>⚠ DEPT AMBIGUOUS:</strong> "${esc(s.fcst_vendor)}" found in Adaptive forecast under multiple departments for this GL. Cannot determine which forecast row matches AP dept "${esc(s.dept)}" — no forecast amount shown. Align cost center coding in NetSuite and Adaptive to enable automatic matching.</span>`
-          : `<span style="color:var(--text3)">No forecast vendor match found for this vendor (GL: ${esc(s.account)}, Dept: ${esc(s.dept)}). Accrual suggestion based on historical average only.</span>`
+          : `<span style="color:var(--blue)"><strong>📋 NOT IN ADAPTIVE FORECAST — accrual based on historical actuals:</strong> ${
+              s.fcst_missing_reason==='vendor-absent'?`No forecast line exists in Adaptive for this vendor at GL ${esc(s.account)} / Dept ${esc(s.dept)}.`
+              :s.fcst_missing_reason==='no-period-amount'?`"${esc(s.fcst_vendor)}" exists in Adaptive at this GL/Dept but carries no amount for this period.`
+              :`Vendor found in Adaptive but the department could not be resolved.`
+            } Accrual defaults to the 6-month historical average less actuals: ${fmtF(s.six_mo_avg)} − ${fmtF(s.curr_month)} = <strong>${fmtF(s.suggested_amount)}</strong>. If that run-rate is a fair view of the spend, load a forecast line into Adaptive so future closes are forecast-driven.</span>`
         }
+        ${s.vendor_name_mismatch?`<span style="color:var(--purple)"><strong>⚠ VENDOR NAME NOT AN EXACT MATCH — confirm the alignment:</strong> AP records this vendor as <strong>${esc(s.ap_vendor_names)}</strong>, Adaptive forecasts it as <strong>${esc(s.fcst_vendor)}</strong> (${Math.round((s.fcst_match_score||0)*100)}% name similarity). These have been treated as the same vendor so forecast and actuals sit on one line. Verify that is correct, and align the name in Adaptive or NetSuite to remove this warning.</span>`:''}
       </div>
     </div>
     <div class="acc-actions">${dec==='approved'?`<span class="badge b-app">Approved</span> <button class="btn btn-sm" onclick="decide('${esc(period)}','${esc(s.key)}',null)">Undo</button>`:dec==='rejected'?`<span class="badge b-rej">Rejected</span> <button class="btn btn-sm" onclick="decide('${esc(period)}','${esc(s.key)}',null)">Undo</button>`:`<button class="btn btn-sm btn-green" onclick="decide('${esc(period)}','${esc(s.key)}','approved')">Approve</button><button class="btn btn-sm btn-red" onclick="decide('${esc(period)}','${esc(s.key)}','rejected')">Reject</button>`}</div>
@@ -1693,7 +1718,9 @@ function renderApproved(){
       vendor:src?.vendor||normVendor,account:src?.account||account,dept:src?.dept||dept,cc:src?.cc||'',
       curr:src?.curr_month||0,prior:src?.prior_month||0,avg:src?.six_mo_avg||0,
       sugg:src?.suggested_amount||0,fcst:src?.fcst_amount??null,
-      conf:src?.confidence||'low',risk:src?.fcst_risk||'unknown',key});
+      conf:src?.confidence||'low',risk:src?.fcst_risk||'unknown',
+      basis:src?.accrual_basis||'history',fcstVendor:src?.fcst_vendor||'',
+      fcstMissing:!!src?.fcst_missing,nameMismatch:!!src?.vendor_name_mismatch,key});
   });
   approved.sort((a,b)=>a.period.localeCompare(b.period)||b.sugg-a.sugg);
   APPROVED_ROWS=approved;
@@ -1737,7 +1764,9 @@ function dlCSV(rows,name){
 
 function expApproved(){
   const rows=[['Period','Vendor','GL Code','GL Name','Department','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Accrual $','Confidence','Fcst Risk']];
-  APPROVED_ROWS.forEach(e=>rows.push([e.period,e.vendor,e.account,(e.account||'').split(':').slice(1).join(':').trim(),e.dept,e.cc,e.curr,e.prior,e.avg,e.fcst!=null?e.fcst:'N/A',e.sugg,e.conf,e.risk]));
+  rows[0].push('Accrual Basis','Adaptive Fcst Vendor','Not In Adaptive','Vendor Name Not Exact');
+  APPROVED_ROWS.forEach(e=>rows.push([e.period,e.vendor,e.account,(e.account||'').split(':').slice(1).join(':').trim(),e.dept,e.cc,e.curr,e.prior,e.avg,e.fcst!=null?e.fcst:'N/A',e.sugg,e.conf,e.risk,
+    e.basis==='forecast'?'Forecast − Actuals':'Hist Avg − Actuals',e.fcstVendor||'',e.fcstMissing?'YES':'',e.nameMismatch?'YES':'']));
   dlCSV(rows,'approved_accruals_'+new Date().toISOString().slice(0,10)+'.csv');
 }
 
@@ -1747,7 +1776,7 @@ function expCoding(){
   dlCSV(rows,'coding_issues_'+new Date().toISOString().slice(0,10)+'.csv');
 }
 
-function expAccruals(){const period=selVal('acc-period');const approved=getAccSuggestions(period).filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});dlCSV([['Period','Vendor','GL Code','Dept','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Forecast Remaining','Suggested Accrual','Confidence','Fcst Risk']].concat(approved.map(s=>[period,s.vendor,s.account,s.dept,s.cc,s.curr_month,s.prior_month,s.six_mo_avg,s.fcst_amount!==null?s.fcst_amount:'N/A',s.fcst_amount!==null?Math.max(0,s.fcst_amount-s.curr_month):'N/A',s.suggested_amount,s.confidence,s.fcst_risk])),'accruals_approved_'+period+'.csv');}
+function expAccruals(){const period=selVal('acc-period');const approved=getAccSuggestions(period).filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});dlCSV([['Period','Vendor','GL Code','Dept','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Forecast Remaining','Suggested Accrual','Confidence','Fcst Risk','Accrual Basis','Adaptive Fcst Vendor','Not In Adaptive','Vendor Name Not Exact']].concat(approved.map(s=>[period,s.vendor,s.account,s.dept,s.cc,s.curr_month,s.prior_month,s.six_mo_avg,s.fcst_amount!==null?s.fcst_amount:'N/A',s.fcst_amount!==null?Math.max(0,s.fcst_amount-s.curr_month):'N/A',s.suggested_amount,s.confidence,s.fcst_risk,s.accrual_basis==='forecast'?'Forecast − Actuals':'Hist Avg − Actuals',s.fcst_vendor||'',s.fcst_missing?'YES':'',s.vendor_name_mismatch?'YES':''])),'accruals_approved_'+period+'.csv');}
 
 // ── NAV ───────────────────────────────────────────────
 const PAGE_CFG={upload:{t:'Upload Data',s:'Load AP Details and Forecast exports from Adaptive / NetSuite'},actuals:{t:'AP Actuals',s:'12-month spend analysis — filter by any dimension'},fcst:{t:'Forecast vs Actuals',s:'Compare actuals against M8 forecast with GL-level variance commentary'},future:{t:'Future Forecast',s:'Upcoming months forecast — identify lines needing updates'},accruals:{t:'Accruals',s:'Month-end accrual recommendations with forecast risk scoring'},approved:{t:'Current Month Accruals',s:'Finalized approved accruals for the current close period — ready for JE posting'},attention:{t:'Needs Attention',s:'Items requiring action — forecast drift, accrual gaps, spend spikes'},sot:{t:'Source of Truth',s:'Complete 12-month AP actuals — single source of truth'}};
