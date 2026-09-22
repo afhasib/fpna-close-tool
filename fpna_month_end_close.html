@@ -152,6 +152,12 @@
   #attn-hbar:hover #attn-hbar-thumb{opacity:.85;}
   #attn-hbar.dragging{cursor:grabbing;}
   #attn-hbar.dragging #attn-hbar-thumb{opacity:1;cursor:grabbing;transition:none;}
+  /* Excel-style column resizing: a grip on the right edge of each column header */
+  #attn-main-table thead tr:nth-child(2) th{padding-right:13px;}
+  #attn-main-table tbody td{overflow:hidden;text-overflow:ellipsis;}
+  .col-grip{position:absolute;top:0;right:0;width:9px;height:100%;cursor:col-resize;
+    user-select:none;touch-action:none;border-right:2px solid transparent;}
+  .col-grip:hover,.col-grip.resizing{border-right-color:var(--accent);background:var(--accent-light);}
   /* Vendor column stays put while scrolling sideways; header row while scrolling down */
   #attn-main-table thead th{position:sticky;top:0;z-index:2;}
   #attn-main-table thead th:first-child{z-index:3;}
@@ -448,6 +454,7 @@
               <span style="font-size:12px;color:var(--text3)">Show/Hide columns:</span>
               <button class="btn btn-sm" id="btn-act-cols" onclick="toggleAttnCols('act')">▼ Actuals (12 mo)</button>
               <button class="btn btn-sm" id="btn-fcst-cols" onclick="toggleAttnCols('fcst')">▼ Forecast (12 mo)</button>
+              <span style="font-size:11px;color:var(--text3);margin-left:4px">· drag a column edge to resize, double-click it to auto-fit</span>
             </div>
             <div id="attn-scroll-wrap">
               <table id="attn-main-table" data-hbar="1" style="font-size:11px;border-collapse:collapse;white-space:nowrap;min-width:100%">
@@ -458,6 +465,7 @@
               </table>
             </div>
             <div id="attn-hbar" title="Drag to scroll the table left and right"><div id="attn-hbar-thumb"></div></div>
+            <style id="attn-col-style"></style>
           </div>
 
           <!-- CODING VIEW -->
@@ -1447,8 +1455,55 @@ function fitAttnTable(){
     const h=rows[0].offsetHeight;
     rows[1].querySelectorAll('th').forEach(th=>{th.style.top=h+'px';});
   }
+  wireAttnColResize();
+  applyAttnColWidths();
   setupAttnHBar();
   syncAttnHBar();
+}
+
+// ── Excel-style column resizing ───────────────────────
+// Widths are keyed by header label, not column index, so they survive a re-render
+// and the collapsing of the two 12-month column groups (which shifts every index).
+let ATTN_COL_W={};
+const attnColKey=th=>(th.textContent||'').replace(/[▲▼↕⇅▶◀]/g,'').replace(/\s+/g,' ').trim().slice(0,48);
+
+function applyAttnColWidths(){
+  const st=document.getElementById('attn-col-style');if(!st)return;
+  let css='';
+  document.querySelectorAll('#attn-thead tr:nth-child(2) th').forEach((th,i)=>{
+    const w=ATTN_COL_W[attnColKey(th)];if(!w)return;
+    const n=i+1;
+    css+=`#attn-main-table thead tr:nth-child(2) th:nth-child(${n}),#attn-main-table tbody td:nth-child(${n})`
+       +`{width:${w}px!important;min-width:${w}px!important;max-width:${w}px!important;}`;
+  });
+  st.textContent=css;
+}
+
+function wireAttnColResize(){
+  document.querySelectorAll('#attn-thead tr:nth-child(2) th').forEach(th=>{
+    if(th.querySelector('.col-grip'))return;
+    const g=document.createElement('div');
+    g.className='col-grip';
+    g.title='Drag to resize this column — double-click to auto-fit';
+    th.appendChild(g);
+    g.addEventListener('pointerdown',e=>{
+      const key=attnColKey(th),startX=e.clientX,startW=th.offsetWidth;
+      g.classList.add('resizing');g.setPointerCapture(e.pointerId);
+      e.preventDefault();e.stopPropagation(); // don't trigger the header's sort handler
+      const move=ev=>{ATTN_COL_W[key]=Math.max(56,Math.round(startW+(ev.clientX-startX)));applyAttnColWidths();};
+      const up=()=>{
+        g.classList.remove('resizing');
+        g.removeEventListener('pointermove',move);g.removeEventListener('pointerup',up);g.removeEventListener('pointercancel',up);
+        syncAttnHBar(); // total width changed, so the scrollbar thumb must be redrawn
+      };
+      g.addEventListener('pointermove',move);g.addEventListener('pointerup',up);g.addEventListener('pointercancel',up);
+    });
+    g.addEventListener('click',e=>e.stopPropagation());
+    g.addEventListener('dblclick',e=>{
+      delete ATTN_COL_W[attnColKey(th)];applyAttnColWidths();syncAttnHBar();
+      e.preventDefault();e.stopPropagation();
+    });
+  });
 }
 
 // Draw the custom horizontal scrollbar to match the table's scroll state.
@@ -1744,7 +1799,7 @@ function renderDollarView(threshold,dirFilter){
     const totalVarClass=totalVar<0?'var-pos':'var-neg';
     return`<tr data-idx="${idx}" style="border-top:1px solid var(--border);${rowBg}">
       <td style="${p};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:${d.glMismatch||d.deptMismatch?'var(--yellow-light)':'var(--surface)'};z-index:1;min-width:180px" title="${esc(d.vendor)}">${esc(d.vendor)}${mNote}</td>
-      <td style="${p};min-width:140px;font-size:10px" title="${esc(d.gl)} — ${esc(d.gl_name)}"><span class="tag tag-gl" style="font-size:9px">${esc(d.gl)}</span> ${esc(d.gl_name.length>25?d.gl_name.slice(0,25)+'…':d.gl_name)}</td>
+      <td style="${p};min-width:140px;font-size:10px" title="${esc(d.gl)}${d.gl_name&&d.gl_name!==d.gl?' — '+esc(d.gl_name):''}"><span class="tag tag-gl" style="font-size:9px">${esc(d.gl)}</span></td>
       <td style="${p};font-size:10px;color:var(--text3);max-width:130px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.dept)}">${esc(d.dept)}</td>
       <td style="${p};font-size:10px;color:var(--text3);border-right:2px solid var(--border);max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.bu)}">${esc(d.bu)}</td>
       ${actCells}
