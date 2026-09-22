@@ -142,6 +142,16 @@
   #attn-scroll-wrap::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:7px;border:3px solid var(--surface2);}
   #attn-scroll-wrap::-webkit-scrollbar-thumb:hover{background:var(--text3);}
   #attn-scroll-wrap::-webkit-scrollbar-corner{background:var(--surface2);}
+  /* Custom horizontal scrollbar, stuck to the bottom of the view. Native scrollbars
+     are overlay-thin on some platforms and ignore ::-webkit-scrollbar sizing, so this
+     is drawn explicitly and is always visible whenever the table overflows. */
+  #attn-hbar{position:sticky;bottom:0;z-index:6;display:none;height:20px;margin-top:8px;border-radius:10px;
+    background:var(--surface2);border:1px solid var(--border);box-shadow:0 -2px 8px rgba(0,0,0,.06);cursor:pointer;}
+  #attn-hbar-thumb{height:100%;min-width:48px;border-radius:10px;background:var(--accent);opacity:.7;
+    transition:opacity .12s;cursor:grab;}
+  #attn-hbar:hover #attn-hbar-thumb{opacity:.85;}
+  #attn-hbar.dragging{cursor:grabbing;}
+  #attn-hbar.dragging #attn-hbar-thumb{opacity:1;cursor:grabbing;transition:none;}
   /* Vendor column stays put while scrolling sideways; header row while scrolling down */
   #attn-main-table thead th{position:sticky;top:0;z-index:2;}
   #attn-main-table thead th:first-child{z-index:3;}
@@ -440,13 +450,14 @@
               <button class="btn btn-sm" id="btn-fcst-cols" onclick="toggleAttnCols('fcst')">▼ Forecast (12 mo)</button>
             </div>
             <div id="attn-scroll-wrap">
-              <table id="attn-main-table" style="font-size:11px;border-collapse:collapse;white-space:nowrap;min-width:100%">
+              <table id="attn-main-table" data-hbar="1" style="font-size:11px;border-collapse:collapse;white-space:nowrap;min-width:100%">
                 <thead id="attn-thead" style="background:var(--surface2)">
                   <!-- Built dynamically by renderDollarView -->
                 </thead>
                 <tbody id="attn-drift-tbody"></tbody>
               </table>
             </div>
+            <div id="attn-hbar" title="Drag to scroll the table left and right"><div id="attn-hbar-thumb"></div></div>
           </div>
 
           <!-- CODING VIEW -->
@@ -1424,14 +1435,62 @@ let FUT_ROWS=[], FUT_PERIODS=[], FV_ROWS=[], FV_PERIOD='';
 // position, so the result is the same however the page happens to be scrolled.
 function fitAttnTable(){
   const w=document.getElementById('attn-scroll-wrap');if(!w)return;
+  // Bail while the tab is hidden: getBoundingClientRect reads 0 on a display:none
+  // ancestor, which would cap the box at nearly the full viewport height and push
+  // its scrollbar below the fold. refreshAll() renders this tab before it is shown.
+  if(!w.offsetParent)return;
   const docTop=w.getBoundingClientRect().top+window.scrollY;
-  w.style.maxHeight=Math.max(320,window.innerHeight-docTop-16)+'px';
+  w.style.maxHeight=Math.max(320,window.innerHeight-docTop-34)+'px';
   // Two-row header: the lower row has to stick BELOW the group row, not on top of it.
   const rows=document.querySelectorAll('#attn-thead tr');
   if(rows.length>1){
     const h=rows[0].offsetHeight;
     rows[1].querySelectorAll('th').forEach(th=>{th.style.top=h+'px';});
   }
+  setupAttnHBar();
+  syncAttnHBar();
+}
+
+// Draw the custom horizontal scrollbar to match the table's scroll state.
+function syncAttnHBar(){
+  const w=document.getElementById('attn-scroll-wrap'),bar=document.getElementById('attn-hbar'),th=document.getElementById('attn-hbar-thumb');
+  if(!w||!bar||!th)return;
+  const max=w.scrollWidth-w.clientWidth;
+  if(max<=1||!w.offsetParent){bar.style.display='none';return;}
+  bar.style.display='block';
+  const tw=Math.max(48,Math.round(bar.clientWidth*(w.clientWidth/w.scrollWidth)));
+  th.style.width=tw+'px';
+  const usable=Math.max(1,bar.clientWidth-tw);
+  th.style.transform='translateX('+Math.round((w.scrollLeft/max)*usable)+'px)';
+}
+
+function setupAttnHBar(){
+  const w=document.getElementById('attn-scroll-wrap'),bar=document.getElementById('attn-hbar'),th=document.getElementById('attn-hbar-thumb');
+  if(!w||!bar||!th||bar.dataset.wired)return;
+  bar.dataset.wired='1';
+  let dragging=false,startX=0,startLeft=0;
+  const maxScroll=()=>w.scrollWidth-w.clientWidth;
+  const usable=()=>Math.max(1,bar.clientWidth-th.offsetWidth);
+  w.addEventListener('scroll',()=>{if(!dragging)syncAttnHBar();});
+  th.addEventListener('pointerdown',e=>{
+    dragging=true;startX=e.clientX;startLeft=w.scrollLeft;
+    bar.classList.add('dragging');th.setPointerCapture(e.pointerId);
+    e.preventDefault();e.stopPropagation();
+  });
+  th.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    w.scrollLeft=startLeft+((e.clientX-startX)/usable())*maxScroll();
+    syncAttnHBar();
+  });
+  const end=()=>{dragging=false;bar.classList.remove('dragging');};
+  th.addEventListener('pointerup',end);th.addEventListener('pointercancel',end);
+  // Click anywhere on the track to jump there
+  bar.addEventListener('pointerdown',e=>{
+    if(e.target===th)return;
+    const r=bar.getBoundingClientRect();
+    const frac=Math.min(1,Math.max(0,(e.clientX-r.left-th.offsetWidth/2)/usable()));
+    w.scrollLeft=frac*maxScroll();syncAttnHBar();
+  });
 }
 window.addEventListener('resize',fitAttnTable);
 
@@ -1444,6 +1503,7 @@ function switchAttnTab(tab){
   document.getElementById('attn-tab-coding').style.background=isDollar?'var(--surface)':'var(--accent)';
   document.getElementById('attn-tab-coding').style.color=isDollar?'var(--text2)':'#fff';
   if(!isDollar)renderCodingIssues();
+  else fitAttnTable(); // the box was hidden until now, so it could not be measured
 }
 
 function buildAttnData(){
