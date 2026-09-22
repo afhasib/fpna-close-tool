@@ -513,7 +513,7 @@
             <div class="stat"><div class="stat-label">GL Codes</div><div class="stat-value" id="sot-gls">—</div></div>
           </div>
           <div class="table-wrap">
-            <table><thead><tr><th>Period</th><th>Subsidiary</th><th>Posting Date</th><th>Vendor</th><th>GL Code</th><th>Dept</th><th>Cost Center</th><th>Entity</th><th>BU</th><th>Class</th><th>Type</th><th>Invoice Type</th><th>Memo</th><th>Coupa PO</th><th>Budget ID</th><th class="td-r">Amount USD</th></tr></thead>
+            <table><thead><tr><th>Period</th><th>Subsidiary</th><th>Posting Date</th><th>Vendor</th><th>GL Code</th><th>Dept</th><th>Cost Center</th><th>Entity</th><th>Project</th><th>Class</th><th>Type</th><th>Invoice Type</th><th>Memo</th><th>Coupa PO</th><th>Budget ID</th><th class="td-r">Amount USD</th></tr></thead>
             <tbody id="sot-tbody"></tbody></table>
           </div>
           <div style="margin-top:6px;text-align:right;font-size:11px;color:var(--text3)" id="sot-lbl"></div>
@@ -944,6 +944,52 @@ function renderActuals(){
 }
 function clearF(prefix){clearAllMS(prefix);renderActuals();renderSOT();}
 
+// ── SOURCE OF TRUTH ───────────────────────────────────
+// Dimension selects on this page are plain <select>s (not the ms-wrap widgets),
+// so they are populated here from whatever AP holds.
+const SOT_FILTERS=[['sot-period','period'],['sot-sub','sub'],['sot-dept','dept'],['sot-vendor','vendor'],['sot-gl','account'],['sot-cc','cc'],['sot-type','type']];
+const SOT_ROW_CAP=500;
+
+function getSOTF(){
+  let d=AP;
+  SOT_FILTERS.forEach(([id,f])=>{const v=selVal(id);if(v)d=d.filter(r=>r[f]===v);});
+  const q=selVal('sot-search').toLowerCase().trim();
+  if(q)d=d.filter(r=>(r.vendor||'').toLowerCase().includes(q)||(r.memo||'').toLowerCase().includes(q)||(r.account||'').toLowerCase().includes(q));
+  return d.slice().sort((a,b)=>b.period.localeCompare(a.period)||Math.abs(b.amount)-Math.abs(a.amount));
+}
+
+function renderSOT(){
+  const has=AP.length>0;
+  document.getElementById('sot-empty').style.display=has?'none':'block';
+  document.getElementById('sot-content').style.display=has?'block':'none';
+  if(!has)return;
+  SOT_FILTERS.forEach(([id,f])=>{
+    const el=document.getElementById(id);if(!el)return;
+    const cur=el.value;const all=el.options[0]?el.options[0].textContent:'All';
+    const vals=[...new Set(AP.map(r=>r[f]))].filter(Boolean).sort();
+    el.innerHTML=`<option value="">${esc(all)}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    el.value=cur; // keep the pick when it still exists, else falls back to "All"
+  });
+  const d=getSOTF();
+  document.getElementById('sot-tot').textContent=fmt(d.reduce((s,r)=>s+r.amount,0));
+  document.getElementById('sot-txns').textContent=d.length.toLocaleString();
+  document.getElementById('sot-vends').textContent=new Set(d.map(r=>r.vendor)).size.toLocaleString();
+  document.getElementById('sot-gls').textContent=new Set(d.map(r=>r.account)).size.toLocaleString();
+  document.getElementById('sot-tbody').innerHTML=d.slice(0,SOT_ROW_CAP).map(r=>`<tr>
+    <td>${esc(r.period)}</td><td class="td-m">${esc(r.sub)}</td><td class="td-m">${esc(r.posting)}</td>
+    <td style="font-weight:600">${esc(r.vendor)}</td><td><span class="tag tag-gl">${esc(r.account)}</span></td>
+    <td class="td-m">${esc(r.dept)}</td><td class="td-m">${esc(r.cc)}</td><td class="td-m">${esc(r.entity)}</td>
+    <td class="td-m">${esc(r.proj)}</td><td class="td-m">${esc(r.cls)}</td><td class="td-m">${esc(r.type)}</td>
+    <td class="td-m">${esc(r.inv_type)}</td>
+    <td class="td-m" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.memo)}">${esc(r.memo)}</td>
+    <td class="td-m">${esc(r.coupa)}</td><td class="td-m">${esc(r.budget)}</td>
+    <td class="td-r">${fmtF(r.amount)}</td></tr>`).join('')
+    ||`<tr><td colspan="16" style="padding:24px;text-align:center;color:var(--text3)">No transactions match these filters.</td></tr>`;
+  document.getElementById('sot-lbl').textContent=d.length>SOT_ROW_CAP
+    ?`Showing first ${SOT_ROW_CAP.toLocaleString()} of ${d.length.toLocaleString()} transactions — narrow the filters, or export for the full set.`
+    :`${d.length.toLocaleString()} transaction${d.length===1?'':'s'}`;
+}
+
 
 // ── FUZZY VENDOR MATCHING ENGINE ─────────────────────
 // Trigram similarity — same algorithm as PostgreSQL similarity()
@@ -1121,6 +1167,7 @@ function renderFcstVsAct(){
   document.getElementById('fv-fcst').textContent=fmt(totFcst);document.getElementById('fv-act').textContent=fmt(totAct);document.getElementById('fv-var').textContent=fmt(totVar);document.getElementById('fv-pct').textContent=fmtP(totPct);
   if(!actP.length){document.getElementById('fv-alert').style.display='block';document.getElementById('fv-alert').textContent=`No actuals for ${period} yet.`;}else document.getElementById('fv-alert').style.display='none';
   const allRows=Object.values(fcMap).map(f=>{const k=f.gl_code+'||'+f.dept+'||'+f.cc;const actual=actMap[k]||0;const variance=actual-f.amount;const pct=f.amount!==0?(variance/Math.abs(f.amount)*100):null;return{...f,actual,variance,pct};}).sort((a,b)=>Math.abs(b.variance)-Math.abs(a.variance));
+  FV_ROWS=allRows;FV_PERIOD=period;
   const glGroups={};allRows.forEach(r=>{if(!glGroups[r.gl_name])glGroups[r.gl_name]=[];glGroups[r.gl_name].push(r);});
   let html='';
   Object.entries(glGroups).forEach(([glName,rows])=>{
@@ -1144,6 +1191,7 @@ function renderFuture(){
   initMS('ms-fut-dept',[...new Set(d.map(r=>r.dept))].filter(Boolean),renderFuture);
   d=msFilter(d,'ms-fut-gl','gl_code');d=msFilter(d,'ms-fut-bu','bu');d=msFilter(d,'ms-fut-dept','dept');
   const keys={};d.forEach(r=>{const k=r.gl_code+'||'+r.dept+'||'+r.cc+'||'+r.vendor_name;if(!keys[k])keys[k]={gl_code:r.gl_code,gl_name:r.gl_name,dept:r.dept,cc:r.cc,vendor:r.vendor_name,bu:r.bu,amts:{}};keys[k].amts[r.period]=(keys[k].amts[r.period]||0)+r.amount;});
+  FUT_ROWS=Object.values(keys);FUT_PERIODS=futP;
   document.getElementById('fut-thead').innerHTML=`<th>GL Code</th><th>GL Name</th><th>BU</th><th>Dept</th><th>Vendor (FP&A)</th>`+futP.map(p=>`<th class="td-r">${toML(p)}</th>`).join('')+`<th class="td-r">Total</th>`;
   document.getElementById('fut-tbody').innerHTML=Object.values(keys).map(row=>{const tot=Object.values(row.amts).reduce((s,v)=>s+v,0);return`<tr><td><span class="tag tag-gl">${esc(row.gl_code)}</span></td><td class="td-m">${esc(row.gl_name)}</td><td class="td-m">${esc(row.bu)}</td><td class="td-m">${esc(row.dept)}</td><td class="td-m">${esc(row.vendor)}</td>${futP.map(p=>`<td class="td-r">${row.amts[p]?fmtF(row.amts[p]):'—'}</td>`).join('')}<td class="td-r" style="font-weight:700">${fmtF(tot)}</td></tr>`;}).join('');
 }
@@ -1362,6 +1410,7 @@ async function decide(p,k,d){
 
 // ── NEEDS ATTENTION ───────────────────────────────────
 let ATTN_DRIFT_ALL=[], ATTN_CODING_ALL=[], APPROVED_ROWS=[];
+let FUT_ROWS=[], FUT_PERIODS=[], FV_ROWS=[], FV_PERIOD='';
 
 function switchAttnTab(tab){
   const isDollar=tab==='dollar';
@@ -1819,6 +1868,45 @@ function expApproved(){
   APPROVED_ROWS.forEach(e=>rows.push([e.period,e.vendor,e.account,(e.account||'').split(':').slice(1).join(':').trim(),e.dept,e.cc,e.curr,e.prior,e.avg,e.fcst!=null?e.fcst:'N/A',e.sugg,e.conf,e.risk,
     e.basis==='forecast'?'Forecast − Actuals':'Hist Avg − Actuals',e.fcstVendor||'',e.fcstMissing?'YES':'',e.nameMismatch?'YES':'',e.noApHistory?'YES':'']));
   dlCSV(rows,'approved_accruals_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function expSOT(){
+  const rows=[['Period','Subsidiary','Posting Date','Vendor','GL Code','Department','Cost Center','Entity','Project','Class','Type','Invoice Type','Memo','Coupa PO','Budget ID','Currency','Amount USD']];
+  getSOTF().forEach(r=>rows.push([r.period,r.sub,r.posting,r.vendor,r.account,r.dept,r.cc,r.entity,r.proj,r.cls,r.type,r.inv_type,r.memo,r.coupa,r.budget,r.currency,r.amount]));
+  dlCSV(rows,'source_of_truth_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function expActuals(){
+  const rows=[['Period','Subsidiary','Posting Date','Vendor','GL Code','Department','Cost Center','Entity','Project','Class','Type','Invoice Type','Memo','Coupa PO','Budget ID','Amount USD']];
+  getAPF().forEach(r=>rows.push([r.period,r.sub,r.posting,r.vendor,r.account,r.dept,r.cc,r.entity,r.proj,r.cls,r.type,r.inv_type,r.memo,r.coupa,r.budget,r.amount]));
+  dlCSV(rows,'ap_actuals_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function expFcst(){
+  const rows=[['Period','GL Code','GL Name','BU','Cost Center','Dept','Vendor (FP&A)','Forecast','Actual','Variance','Variance %','Status','Commentary']];
+  FV_ROWS.forEach(r=>{
+    const st=r.pct===null?'No fcst':Math.abs(r.pct)<5?'On Track':r.variance>0?'Over':'Under';
+    const com=COMMENTARY[`${FV_PERIOD}||${r.gl_name}`];
+    rows.push([FV_PERIOD,r.gl_code,r.gl_name,r.bu,r.cc,r.dept,r.vendor_name,r.amount,r.actual,r.variance,r.pct!==null?r.pct.toFixed(1):'N/A',st,com?com.text:'']);
+  });
+  dlCSV(rows,'forecast_vs_actuals_'+(FV_PERIOD||'period')+'.csv');
+}
+
+function expFuture(){
+  const rows=[['GL Code','GL Name','BU','Dept','Cost Center','Vendor (FP&A)',...FUT_PERIODS.map(toML),'Total']];
+  FUT_ROWS.forEach(r=>{
+    const amts=FUT_PERIODS.map(p=>r.amts[p]||0);
+    rows.push([r.gl_code,r.gl_name,r.bu,r.dept,r.cc,r.vendor,...amts,amts.reduce((s,v)=>s+v,0)]);
+  });
+  dlCSV(rows,'future_forecast_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
+function expAttn(){
+  const rows=[['Vendor','Matched Fcst Vendor','Match %','GL Code','GL Name','Dept','Cost Center','Actuals Avg/Mo','Forecast Avg/Mo','Variance','Variance %','Direction','GL Mismatch','Dept Mismatch','No Forecast','Active Months','Why']];
+  ATTN_DRIFT_ALL.forEach(i=>rows.push([i.vendor,i.fcst_vendor,Math.round((i.match_score||0)*100)+'%',i.gl,i.gl_name,i.dept,i.cc,
+    Math.round(i.actAvg),Math.round(i.fcstAvg),Math.round(i.variance),i.varPct!==null&&isFinite(i.varPct)?i.varPct.toFixed(1):'N/A',
+    i.isFav?'Favourable':'Unfavourable',i.glMismatch?'YES':'',i.deptMismatch?'YES':'',i.noForecast?'YES':'',i.activeMonths||'',i.why]));
+  dlCSV(rows,'needs_attention_'+new Date().toISOString().slice(0,10)+'.csv');
 }
 
 function expCoding(){
