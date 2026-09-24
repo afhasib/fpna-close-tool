@@ -555,13 +555,7 @@
           <div class="alert al-info mb12">Complete 12-month AP actuals — your single source of truth. Filter by any dimension.</div>
           <div class="filter-bar">
             <input type="text" id="sot-search" placeholder="Search vendor / memo / GL…" oninput="renderSOT()" style="min-width:160px">
-            <select id="sot-period" onchange="renderSOT()"><option value="">All Periods</option></select>
-            <select id="sot-sub" onchange="renderSOT()"><option value="">All Subsidiaries</option></select>
-            <select id="sot-dept" onchange="renderSOT()"><option value="">All Departments</option></select>
-            <select id="sot-vendor" onchange="renderSOT()"><option value="">All Vendors</option></select>
-            <select id="sot-gl" onchange="renderSOT()"><option value="">All GL Codes</option></select>
-            <select id="sot-cc" onchange="renderSOT()"><option value="">All Cost Centers</option></select>
-            <select id="sot-type" onchange="renderSOT()"><option value="">All Types</option></select>
+            <span id="sot-ms-slots" style="display:contents"></span>
             <button class="btn btn-sm" onclick="clearF('sot')">Clear</button>
             <button class="btn btn-primary btn-sm ml-auto" onclick="expSOT()">Export Full Dataset</button>
           </div>
@@ -810,8 +804,20 @@ function clearMS(id){
   }
 }
 
+// Reset one multi-select completely, including options its search box is currently
+// hiding, and clear that search. clearMS deliberately only touches visible items —
+// right for the dropdown's own "None" button, wrong for a toolbar Clear, which
+// would otherwise leave hidden selections silently filtering the data.
+function resetMS(id){
+  const wrap=document.getElementById(id);if(!wrap)return;
+  if(MS_STATE[id])MS_STATE[id].clear();
+  wrap.querySelectorAll('input[type=checkbox]').forEach(cb=>{cb.checked=false;});
+  const s=wrap.querySelector('.ms-search input');
+  if(s&&s.value){s.value='';filterMSList(s);}
+  updateMSBtn(id);
+}
 function clearAllMS(prefix){
-  Object.keys(MS_STATE).filter(k=>k.startsWith('ms-'+prefix)).forEach(k=>{clearMS(k);});
+  document.querySelectorAll('.ms-wrap[id^="ms-'+prefix+'"]').forEach(w=>resetMS(w.id));
 }
 
 // Close dropdowns when clicking outside
@@ -1022,15 +1028,31 @@ function clearF(prefix){clearAllMS(prefix);renderActuals();renderSOT();}
 // ── SOURCE OF TRUTH ───────────────────────────────────
 // Dimension selects on this page are plain <select>s (not the ms-wrap widgets),
 // so they are populated here from whatever AP holds.
-const SOT_FILTERS=[['sot-period','period'],['sot-sub','sub'],['sot-dept','dept'],['sot-vendor','vendor'],['sot-gl','account'],['sot-cc','cc'],['sot-type','type']];
 const SOT_ROW_CAP=500;
 
-function getSOTF(){
+// Every pivot dimension is filterable, each with its own searchable multi-select.
+// `skip` leaves out the filters on given fields — used to build the column axis,
+// which must not be narrowed by filters on the row dimensions.
+function getSOTF(skip){
   let d=AP;
-  SOT_FILTERS.forEach(([id,f])=>{const v=selVal(id);if(v)d=d.filter(r=>r[f]===v);});
+  SOT_DIMS.forEach(([f])=>{if(!skip||!skip.includes(f))d=msFilter(d,'ms-sot-'+f,f);});
   const q=selVal('sot-search').toLowerCase().trim();
   if(q)d=d.filter(r=>(r.vendor||'').toLowerCase().includes(q)||(r.memo||'').toLowerCase().includes(q)||(r.account||'').toLowerCase().includes(q));
   return d.slice().sort((a,b)=>b.period.localeCompare(a.period)||Math.abs(b.amount)-Math.abs(a.amount));
+}
+
+function buildSOTFilters(){
+  const slot=document.getElementById('sot-ms-slots');if(!slot)return;
+  if(!slot.dataset.built){
+    slot.dataset.built='1';
+    slot.innerHTML=SOT_DIMS.map(([f,label])=>{
+      const id='ms-sot-'+f;
+      return `<div class="ms-wrap" id="${id}"><button class="ms-btn" onclick="toggleMS('${id}')">${esc(label)} <span class="ms-cnt"></span>▾</button>`
+        +`<div class="ms-dropdown"><div class="ms-search"><input placeholder="Search ${esc(label.toLowerCase())}…" oninput="filterMSList(this)"></div>`
+        +`<div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('${id}')">All</button><button onclick="clearMS('${id}')">None</button></div></div></div>`;
+    }).join('');
+  }
+  SOT_DIMS.forEach(([f])=>initMS('ms-sot-'+f,[...new Set(AP.map(r=>r[f]))].filter(Boolean),renderSOT));
 }
 
 // Dimensions available to the pivot. Default view answers the common question:
@@ -1038,7 +1060,7 @@ function getSOTF(){
 const SOT_DIMS=[['vendor','Vendor'],['period','Period'],['account','GL Code'],['dept','Department'],
   ['cc','Cost Center'],['sub','Subsidiary'],['entity','Entity'],['proj','Project'],['cls','Class'],
   ['type','Type'],['inv_type','Invoice Type']];
-const SOT_DEFAULT_ROWS=['vendor'],SOT_DEFAULT_COLS=['period'];
+const SOT_DEFAULT_ROWS=['vendor'],SOT_DEFAULT_COLS=['period'],SOT_COL_CAP=80;
 let SOT_ROWS_F=[...SOT_DEFAULT_ROWS],SOT_COLS_F=[...SOT_DEFAULT_COLS];
 let SOT_PIVOT={rows:[],cols:[]};
 const SOT_SEP='\u0001',BLANK='(blank)';
@@ -1097,13 +1119,7 @@ function renderSOT(){
   document.getElementById('sot-empty').style.display=has?'none':'block';
   document.getElementById('sot-content').style.display=has?'block':'none';
   if(!has)return;
-  SOT_FILTERS.forEach(([id,f])=>{
-    const el=document.getElementById(id);if(!el)return;
-    const cur=el.value;const all=el.options[0]?el.options[0].textContent:'All';
-    const vals=[...new Set(AP.map(r=>r[f]))].filter(Boolean).sort();
-    el.innerHTML=`<option value="">${esc(all)}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
-    el.value=cur; // keep the pick when it still exists, else falls back to "All"
-  });
+  buildSOTFilters();
   wirePivotDnD();renderPivotBuilder();
   const d=getSOTF();
   document.getElementById('sot-tot').textContent=fmt(d.reduce((s,r)=>s+r.amount,0));
@@ -1123,7 +1139,20 @@ function renderSOT(){
     row.total+=r.amount;row.n++;
     colTot.set(ck,(colTot.get(ck)||0)+r.amount);
   });
-  const cols=[...colTot.keys()].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  // The column axis spans every value in the data, not only those the current
+  // row selection happens to have activity in — so one vendor billed in a single
+  // month still shows the whole year, with empty months reading as a dash. Filters
+  // on the column dimensions themselves are honoured; filters on the row
+  // dimensions are not, or picking one vendor would collapse the axis again.
+  let cols;
+  if(colsF.length){
+    const axis=getSOTF(SOT_DIMS.map(d=>d[0]).filter(f=>!colsF.includes(f)));
+    const universe=[...new Set(axis.map(r=>colsF.map(f=>r[f]||BLANK).join(SOT_SEP)))];
+    // A cross-product of several dimensions can run to thousands of columns; past
+    // the cap fall back to just the populated ones so the grid stays usable.
+    cols=(universe.length<=SOT_COL_CAP?universe:[...colTot.keys()])
+      .sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  } else cols=[...colTot.keys()];
   const allRows=[...rowMap.values()].sort((a,b)=>Math.abs(b.total)-Math.abs(a.total));
   const rows=allRows.slice(0,SOT_ROW_CAP);
   SOT_PIVOT={rows,cols,rowsF:[...rowsF],colsF:[...colsF]};
