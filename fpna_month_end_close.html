@@ -176,7 +176,8 @@
   #sot-scroll-wrap::-webkit-scrollbar-track{background:var(--surface2);border-radius:7px;}
   #sot-scroll-wrap::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:7px;border:3px solid var(--surface2);}
   #sot-pivot-table{font-size:11px;border-collapse:collapse;white-space:nowrap;min-width:100%;}
-  #sot-pivot-table thead th{position:sticky;top:0;z-index:2;}
+  #sot-pivot-table thead th{position:sticky;top:0;z-index:2;padding-right:13px;}
+  #sot-pivot-table tbody td{overflow:hidden;text-overflow:ellipsis;}
   #sot-pivot-table td,#sot-pivot-table th{padding:6px 10px;border-bottom:1px solid var(--border);}
   #sot-pivot-table td.pv-rh{position:sticky;left:0;background:var(--surface);font-weight:600;z-index:1;
     max-width:260px;overflow:hidden;text-overflow:ellipsis;}
@@ -583,12 +584,13 @@
               <div class="pv-shelf-label">Columns</div>
               <div class="pv-zone" id="pv-cols" data-zone="cols"></div>
             </div>
-            <div class="pv-hint">Drag a field into Rows or Columns to re-pivot · click a value to see the transactions behind it · <button class="btn btn-sm" onclick="resetPivot()">Reset</button></div>
+            <div class="pv-hint">Drag a field into Rows or Columns to re-pivot · click a value to see the transactions behind it · drag a column edge to resize · <button class="btn btn-sm" onclick="resetPivot()">Reset</button></div>
           </div>
           <div id="sot-scroll-wrap">
             <table id="sot-pivot-table"><thead id="sot-thead"></thead><tbody id="sot-tbody"></tbody></table>
           </div>
           <div id="sot-hbar" title="Drag to scroll the table left and right"><div id="sot-hbar-thumb"></div></div>
+          <style id="sot-col-style"></style>
           <div style="margin-top:6px;text-align:right;font-size:11px;color:var(--text3)" id="sot-lbl"></div>
         </div>
       </div>
@@ -1193,6 +1195,7 @@ function fitSOTTable(){
   const w=document.getElementById('sot-scroll-wrap');if(!w||!w.offsetParent)return;
   const docTop=w.getBoundingClientRect().top+window.scrollY;
   w.style.maxHeight=Math.max(320,window.innerHeight-docTop-34)+'px';
+  wireColResize(RESIZE_SOT);applyColWidths(RESIZE_SOT);
   setupSOTHBar();syncSOTHBar();
 }
 function syncSOTHBar(){
@@ -1675,52 +1678,61 @@ function fitAttnTable(){
     const h=rows[0].offsetHeight;
     rows[1].querySelectorAll('th').forEach(th=>{th.style.top=h+'px';});
   }
-  wireAttnColResize();
-  applyAttnColWidths();
+  wireColResize(RESIZE_ATTN);
+  applyColWidths(RESIZE_ATTN);
   setupAttnHBar();
   syncAttnHBar();
 }
 
-// ── Excel-style column resizing ───────────────────────
-// Widths are keyed by header label, not column index, so they survive a re-render
-// and the collapsing of the two 12-month column groups (which shifts every index).
-let ATTN_COL_W={};
-const attnColKey=th=>(th.textContent||'').replace(/[▲▼↕⇅▶◀]/g,'').replace(/\s+/g,' ').trim().slice(0,48);
+// ── Excel-style column resizing (shared by any table) ─────────────────────────
+// Widths are keyed by header label rather than column index, so they survive a
+// re-render and any change that shifts column order — collapsing the 12-month
+// groups on Needs Attention, or re-pivoting Source of Truth.
+const COL_W={};
+const colKey=th=>(th.textContent||'').replace(/[▲▼↕⇅▶◀×]/g,'').replace(/\s+/g,' ').trim().slice(0,48);
 
-function applyAttnColWidths(){
-  const st=document.getElementById('attn-col-style');if(!st)return;
+// cfg: {table, head, headRow, body, styleId, after}
+const RESIZE_ATTN={table:'attn-main-table',head:'#attn-thead tr:nth-child(2) th',
+  headRow:'thead tr:nth-child(2)',body:'tbody td',styleId:'attn-col-style',after:()=>syncAttnHBar()};
+const RESIZE_SOT={table:'sot-pivot-table',head:'#sot-thead tr th',
+  headRow:'thead tr',body:'tbody tr:not(.pv-grand) td',styleId:'sot-col-style',after:()=>syncSOTHBar()};
+
+function applyColWidths(cfg){
+  const st=document.getElementById(cfg.styleId);if(!st)return;
+  const store=COL_W[cfg.table]||{};
   let css='';
-  document.querySelectorAll('#attn-thead tr:nth-child(2) th').forEach((th,i)=>{
-    const w=ATTN_COL_W[attnColKey(th)];if(!w)return;
+  document.querySelectorAll(cfg.head).forEach((th,i)=>{
+    const w=store[colKey(th)];if(!w)return;
     const n=i+1;
-    css+=`#attn-main-table thead tr:nth-child(2) th:nth-child(${n}),#attn-main-table tbody td:nth-child(${n})`
+    css+=`#${cfg.table} ${cfg.headRow} th:nth-child(${n}),#${cfg.table} ${cfg.body}:nth-child(${n})`
        +`{width:${w}px!important;min-width:${w}px!important;max-width:${w}px!important;}`;
   });
   st.textContent=css;
 }
 
-function wireAttnColResize(){
-  document.querySelectorAll('#attn-thead tr:nth-child(2) th').forEach(th=>{
+function wireColResize(cfg){
+  const store=COL_W[cfg.table]||(COL_W[cfg.table]={});
+  document.querySelectorAll(cfg.head).forEach(th=>{
     if(th.querySelector('.col-grip'))return;
     const g=document.createElement('div');
     g.className='col-grip';
     g.title='Drag to resize this column — double-click to auto-fit';
     th.appendChild(g);
     g.addEventListener('pointerdown',e=>{
-      const key=attnColKey(th),startX=e.clientX,startW=th.offsetWidth;
+      const key=colKey(th),startX=e.clientX,startW=th.offsetWidth;
       g.classList.add('resizing');g.setPointerCapture(e.pointerId);
       e.preventDefault();e.stopPropagation(); // don't trigger the header's sort handler
-      const move=ev=>{ATTN_COL_W[key]=Math.max(56,Math.round(startW+(ev.clientX-startX)));applyAttnColWidths();};
+      const move=ev=>{store[key]=Math.max(56,Math.round(startW+(ev.clientX-startX)));applyColWidths(cfg);};
       const up=()=>{
         g.classList.remove('resizing');
         g.removeEventListener('pointermove',move);g.removeEventListener('pointerup',up);g.removeEventListener('pointercancel',up);
-        syncAttnHBar(); // total width changed, so the scrollbar thumb must be redrawn
+        cfg.after&&cfg.after(); // total width changed, so the scrollbar thumb must be redrawn
       };
       g.addEventListener('pointermove',move);g.addEventListener('pointerup',up);g.addEventListener('pointercancel',up);
     });
     g.addEventListener('click',e=>e.stopPropagation());
     g.addEventListener('dblclick',e=>{
-      delete ATTN_COL_W[attnColKey(th)];applyAttnColWidths();syncAttnHBar();
+      delete store[colKey(th)];applyColWidths(cfg);cfg.after&&cfg.after();
       e.preventDefault();e.stopPropagation();
     });
   });
