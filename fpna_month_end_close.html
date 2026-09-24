@@ -158,6 +158,38 @@
   .col-grip{position:absolute;top:0;right:0;width:9px;height:100%;cursor:col-resize;
     user-select:none;touch-action:none;border-right:2px solid transparent;}
   .col-grip:hover,.col-grip.resizing{border-right-color:var(--accent);background:var(--accent-light);}
+  /* ── Source of Truth pivot ── */
+  #pivot-builder{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;}
+  .pv-shelf{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;}
+  .pv-shelf-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;width:64px;flex-shrink:0;padding-top:7px;}
+  .pv-zone{flex:1;min-height:34px;display:flex;flex-wrap:wrap;gap:6px;padding:5px;border:1px dashed var(--border);border-radius:var(--rsm);background:var(--surface2);}
+  .pv-zone.over{border-color:var(--accent);background:var(--accent-light);}
+  .pv-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;font-size:11px;font-weight:600;border-radius:99px;
+    background:var(--surface);border:1px solid var(--border);color:var(--text2);cursor:grab;user-select:none;white-space:nowrap;}
+  .pv-chip:active{cursor:grabbing;}
+  .pv-zone:not(.pv-pool) .pv-chip{background:var(--accent-light);border-color:var(--accent-border);color:var(--accent);}
+  .pv-chip .pv-x{cursor:pointer;opacity:.5;font-weight:700;}
+  .pv-chip .pv-x:hover{opacity:1;}
+  .pv-hint{font-size:11px;color:var(--text3);padding-left:74px;display:flex;align-items:center;gap:8px;}
+  #sot-scroll-wrap{width:100%;max-height:70vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);}
+  #sot-scroll-wrap::-webkit-scrollbar{height:14px;width:14px;}
+  #sot-scroll-wrap::-webkit-scrollbar-track{background:var(--surface2);border-radius:7px;}
+  #sot-scroll-wrap::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:7px;border:3px solid var(--surface2);}
+  #sot-pivot-table{font-size:11px;border-collapse:collapse;white-space:nowrap;min-width:100%;}
+  #sot-pivot-table thead th{position:sticky;top:0;z-index:2;}
+  #sot-pivot-table td,#sot-pivot-table th{padding:6px 10px;border-bottom:1px solid var(--border);}
+  #sot-pivot-table td.pv-rh{position:sticky;left:0;background:var(--surface);font-weight:600;z-index:1;
+    max-width:260px;overflow:hidden;text-overflow:ellipsis;}
+  #sot-pivot-table th.pv-rh{position:sticky;left:0;z-index:3;}
+  #sot-pivot-table td.pv-val{text-align:right;cursor:pointer;font-variant-numeric:tabular-nums;}
+  #sot-pivot-table td.pv-val:hover{background:var(--accent-light);color:var(--accent);text-decoration:underline;}
+  #sot-pivot-table td.pv-tot{text-align:right;font-weight:700;background:var(--surface2);font-variant-numeric:tabular-nums;}
+  #sot-pivot-table tr.pv-grand td{font-weight:700;background:var(--surface2);border-top:2px solid var(--border);position:sticky;bottom:0;}
+  #sot-hbar{position:sticky;bottom:0;z-index:6;display:none;height:20px;margin-top:8px;border-radius:10px;
+    background:var(--surface2);border:1px solid var(--border);box-shadow:0 -2px 8px rgba(0,0,0,.06);cursor:pointer;}
+  #sot-hbar-thumb{height:100%;min-width:48px;border-radius:10px;background:var(--accent);opacity:.7;transition:opacity .12s;cursor:grab;}
+  #sot-hbar:hover #sot-hbar-thumb{opacity:.85;}
+  #sot-hbar.dragging #sot-hbar-thumb{opacity:1;cursor:grabbing;transition:none;}
   /* Vendor column stays put while scrolling sideways; header row while scrolling down */
   #attn-main-table thead th{position:sticky;top:0;z-index:2;}
   #attn-main-table thead th:first-child{z-index:3;}
@@ -538,10 +570,25 @@
             <div class="stat"><div class="stat-label">Vendors</div><div class="stat-value" id="sot-vends">—</div></div>
             <div class="stat"><div class="stat-label">GL Codes</div><div class="stat-value" id="sot-gls">—</div></div>
           </div>
-          <div class="table-wrap">
-            <table><thead><tr><th>Period</th><th>Subsidiary</th><th>Posting Date</th><th>Vendor</th><th>GL Code</th><th>Dept</th><th>Cost Center</th><th>Entity</th><th>Project</th><th>Class</th><th>Type</th><th>Invoice Type</th><th>Memo</th><th>Coupa PO</th><th>Budget ID</th><th class="td-r">Amount USD</th></tr></thead>
-            <tbody id="sot-tbody"></tbody></table>
+          <div id="pivot-builder">
+            <div class="pv-shelf">
+              <div class="pv-shelf-label">Fields</div>
+              <div class="pv-zone pv-pool" id="pv-pool" data-zone="pool"></div>
+            </div>
+            <div class="pv-shelf">
+              <div class="pv-shelf-label">Rows</div>
+              <div class="pv-zone" id="pv-rows" data-zone="rows"></div>
+            </div>
+            <div class="pv-shelf">
+              <div class="pv-shelf-label">Columns</div>
+              <div class="pv-zone" id="pv-cols" data-zone="cols"></div>
+            </div>
+            <div class="pv-hint">Drag a field into Rows or Columns to re-pivot · click a value to see the transactions behind it · <button class="btn btn-sm" onclick="resetPivot()">Reset</button></div>
           </div>
+          <div id="sot-scroll-wrap">
+            <table id="sot-pivot-table"><thead id="sot-thead"></thead><tbody id="sot-tbody"></tbody></table>
+          </div>
+          <div id="sot-hbar" title="Drag to scroll the table left and right"><div id="sot-hbar-thumb"></div></div>
           <div style="margin-top:6px;text-align:right;font-size:11px;color:var(--text3)" id="sot-lbl"></div>
         </div>
       </div>
@@ -984,6 +1031,65 @@ function getSOTF(){
   return d.slice().sort((a,b)=>b.period.localeCompare(a.period)||Math.abs(b.amount)-Math.abs(a.amount));
 }
 
+// Dimensions available to the pivot. Default view answers the common question:
+// monthly actuals per vendor with a full-period total down the right.
+const SOT_DIMS=[['vendor','Vendor'],['period','Period'],['account','GL Code'],['dept','Department'],
+  ['cc','Cost Center'],['sub','Subsidiary'],['entity','Entity'],['proj','Project'],['cls','Class'],
+  ['type','Type'],['inv_type','Invoice Type']];
+const SOT_DEFAULT_ROWS=['vendor'],SOT_DEFAULT_COLS=['period'];
+let SOT_ROWS_F=[...SOT_DEFAULT_ROWS],SOT_COLS_F=[...SOT_DEFAULT_COLS];
+let SOT_PIVOT={rows:[],cols:[]};
+const SOT_SEP='\u0001',BLANK='(blank)';
+const dimLabel=k=>(SOT_DIMS.find(d=>d[0]===k)||[k,k])[1];
+
+function resetPivot(){SOT_ROWS_F=[...SOT_DEFAULT_ROWS];SOT_COLS_F=[...SOT_DEFAULT_COLS];renderSOT();}
+
+function renderPivotBuilder(){
+  const used=new Set([...SOT_ROWS_F,...SOT_COLS_F]);
+  const chip=(k,zone)=>`<div class="pv-chip" draggable="true" data-k="${k}" data-from="${zone}">${esc(dimLabel(k))}`
+    +(zone==='pool'?'':`<span class="pv-x" data-rm="${k}" data-zone="${zone}" title="Remove">×</span>`)+`</div>`;
+  document.getElementById('pv-pool').innerHTML=SOT_DIMS.filter(d=>!used.has(d[0])).map(d=>chip(d[0],'pool')).join('')
+    ||'<span style="font-size:11px;color:var(--text3);padding:4px">all fields in use</span>';
+  document.getElementById('pv-rows').innerHTML=SOT_ROWS_F.map(k=>chip(k,'rows')).join('')
+    ||'<span style="font-size:11px;color:var(--text3);padding:4px">drop a field here</span>';
+  document.getElementById('pv-cols').innerHTML=SOT_COLS_F.map(k=>chip(k,'cols')).join('')
+    ||'<span style="font-size:11px;color:var(--text3);padding:4px">drop a field here</span>';
+}
+
+function wirePivotDnD(){
+  const b=document.getElementById('pivot-builder');if(!b||b.dataset.wired)return;
+  b.dataset.wired='1';
+  let dragKey=null,dragFrom=null;
+  const listFor=z=>z==='rows'?SOT_ROWS_F:z==='cols'?SOT_COLS_F:null;
+  b.addEventListener('dragstart',e=>{
+    const c=e.target.closest('.pv-chip');if(!c)return;
+    dragKey=c.dataset.k;dragFrom=c.dataset.from;
+    e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',dragKey);
+  });
+  b.addEventListener('dragover',e=>{
+    const z=e.target.closest('.pv-zone');if(!z)return;
+    e.preventDefault();e.dataTransfer.dropEffect='move';z.classList.add('over');
+  });
+  b.addEventListener('dragleave',e=>{const z=e.target.closest('.pv-zone');if(z)z.classList.remove('over');});
+  b.addEventListener('drop',e=>{
+    const z=e.target.closest('.pv-zone');if(!z||!dragKey)return;
+    e.preventDefault();z.classList.remove('over');
+    const to=z.dataset.zone;
+    const from=listFor(dragFrom);if(from){const i=from.indexOf(dragKey);if(i>=0)from.splice(i,1);}
+    const dest=listFor(to);
+    if(dest&&!dest.includes(dragKey))dest.push(dragKey);
+    dragKey=null;dragFrom=null;
+    renderSOT();
+  });
+  // × removes a field back to the pool
+  b.addEventListener('click',e=>{
+    const x=e.target.closest('.pv-x');if(!x)return;
+    const l=listFor(x.dataset.zone);if(!l)return;
+    const i=l.indexOf(x.dataset.rm);if(i>=0)l.splice(i,1);
+    renderSOT();
+  });
+}
+
 function renderSOT(){
   const has=AP.length>0;
   document.getElementById('sot-empty').style.display=has?'none':'block';
@@ -996,25 +1102,139 @@ function renderSOT(){
     el.innerHTML=`<option value="">${esc(all)}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
     el.value=cur; // keep the pick when it still exists, else falls back to "All"
   });
+  wirePivotDnD();renderPivotBuilder();
   const d=getSOTF();
   document.getElementById('sot-tot').textContent=fmt(d.reduce((s,r)=>s+r.amount,0));
   document.getElementById('sot-txns').textContent=d.length.toLocaleString();
   document.getElementById('sot-vends').textContent=new Set(d.map(r=>r.vendor)).size.toLocaleString();
   document.getElementById('sot-gls').textContent=new Set(d.map(r=>r.account)).size.toLocaleString();
-  document.getElementById('sot-tbody').innerHTML=d.slice(0,SOT_ROW_CAP).map(r=>`<tr>
-    <td>${esc(r.period)}</td><td class="td-m">${esc(r.sub)}</td><td class="td-m">${esc(r.posting)}</td>
-    <td style="font-weight:600">${esc(r.vendor)}</td><td><span class="tag tag-gl">${esc(r.account)}</span></td>
-    <td class="td-m">${esc(r.dept)}</td><td class="td-m">${esc(r.cc)}</td><td class="td-m">${esc(r.entity)}</td>
-    <td class="td-m">${esc(r.proj)}</td><td class="td-m">${esc(r.cls)}</td><td class="td-m">${esc(r.type)}</td>
-    <td class="td-m">${esc(r.inv_type)}</td>
-    <td class="td-m" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.memo)}">${esc(r.memo)}</td>
-    <td class="td-m">${esc(r.coupa)}</td><td class="td-m">${esc(r.budget)}</td>
-    <td class="td-r">${fmtF(r.amount)}</td></tr>`).join('')
-    ||`<tr><td colspan="16" style="padding:24px;text-align:center;color:var(--text3)">No transactions match these filters.</td></tr>`;
-  document.getElementById('sot-lbl').textContent=d.length>SOT_ROW_CAP
-    ?`Showing first ${SOT_ROW_CAP.toLocaleString()} of ${d.length.toLocaleString()} transactions — narrow the filters, or export for the full set.`
-    :`${d.length.toLocaleString()} transaction${d.length===1?'':'s'}`;
+
+  // Aggregate into row x column buckets
+  const rowsF=SOT_ROWS_F,colsF=SOT_COLS_F;
+  const rowMap=new Map(),colTot=new Map();
+  d.forEach(r=>{
+    const rk=rowsF.length?rowsF.map(f=>r[f]||BLANK).join(SOT_SEP):'Total';
+    const ck=colsF.length?colsF.map(f=>r[f]||BLANK).join(SOT_SEP):'Amount';
+    let row=rowMap.get(rk);
+    if(!row){row={key:rk,vals:rk.split(SOT_SEP),cells:new Map(),total:0,n:0};rowMap.set(rk,row);}
+    row.cells.set(ck,(row.cells.get(ck)||0)+r.amount);
+    row.total+=r.amount;row.n++;
+    colTot.set(ck,(colTot.get(ck)||0)+r.amount);
+  });
+  const cols=[...colTot.keys()].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const allRows=[...rowMap.values()].sort((a,b)=>Math.abs(b.total)-Math.abs(a.total));
+  const rows=allRows.slice(0,SOT_ROW_CAP);
+  SOT_PIVOT={rows,cols,rowsF:[...rowsF],colsF:[...colsF]};
+
+  const colLabel=ck=>ck.split(SOT_SEP).map((v,i)=>colsF[i]==='period'?toML(v):v).join(' · ');
+  document.getElementById('sot-thead').innerHTML=`<tr>`
+    +rowsF.map((f,i)=>`<th class="${i===0?'pv-rh':''}" style="text-align:left;min-width:180px">${esc(dimLabel(f))}</th>`).join('')
+    +(rowsF.length?'':'<th class="pv-rh" style="text-align:left">Total</th>')
+    +cols.map(c=>`<th style="text-align:right;min-width:96px">${esc(colLabel(c))}</th>`).join('')
+    +`<th style="text-align:right;min-width:110px;background:var(--surface2)">Total</th></tr>`;
+
+  const body=rows.map((row,ri)=>`<tr>`
+    +row.vals.map((v,i)=>`<td class="${i===0?'pv-rh':'td-m'}" title="${esc(v)}">${esc(v)}</td>`).join('')
+    +cols.map((c,ci)=>{const v=row.cells.get(c);
+      return v===undefined?`<td class="pv-val" style="color:var(--text3)">—</td>`
+        :`<td class="pv-val" data-r="${ri}" data-c="${ci}" title="Click for transactions">${fmtF(v)}</td>`;}).join('')
+    +`<td class="pv-tot">${fmtF(row.total)}</td></tr>`).join('');
+  document.getElementById('sot-tbody').innerHTML=body
+    +`<tr class="pv-grand"><td class="pv-rh" ${rowsF.length>1?`colspan="${rowsF.length}"`:''}>Grand Total</td>`
+    +cols.map(c=>`<td style="text-align:right">${fmtF(colTot.get(c)||0)}</td>`).join('')
+    +`<td style="text-align:right">${fmtF([...colTot.values()].reduce((s,v)=>s+v,0))}</td></tr>`;
+  if(!rows.length)document.getElementById('sot-tbody').innerHTML=
+    `<tr><td colspan="${rowsF.length+cols.length+1}" style="padding:24px;text-align:center;color:var(--text3)">No transactions match these filters.</td></tr>`;
+
+  document.getElementById('sot-lbl').textContent=
+    `${allRows.length.toLocaleString()} ${rowsF.map(dimLabel).join(' × ')||'row'} group${allRows.length===1?'':'s'} · `
+    +`${cols.length} column${cols.length===1?'':'s'} · ${d.length.toLocaleString()} transactions`
+    +(allRows.length>SOT_ROW_CAP?` — showing the largest ${SOT_ROW_CAP} by absolute total; the Grand Total row covers all of them.`:'');
+  fitSOTTable();
 }
+
+// Click a pivot value to see the transactions behind it
+function drillPivot(ri,ci){
+  const row=SOT_PIVOT.rows[ri],ck=SOT_PIVOT.cols[ci];if(!row)return;
+  const cv=ck.split(SOT_SEP);
+  const rows=getSOTF().filter(r=>
+    SOT_PIVOT.rowsF.every((f,i)=>(r[f]||BLANK)===row.vals[i])&&
+    SOT_PIVOT.colsF.every((f,i)=>(r[f]||BLANK)===cv[i]));
+  const total=rows.reduce((s,r)=>s+r.amount,0);
+  document.getElementById('drill-icon').textContent='📋';
+  document.getElementById('drill-title').textContent=row.vals.join(' · ')||'All';
+  document.getElementById('drill-sub').textContent=
+    SOT_PIVOT.colsF.map((f,i)=>`${dimLabel(f)}: ${f==='period'?toML(cv[i]):cv[i]}`).join(' · ')||'All periods';
+  document.getElementById('drill-total').textContent=fmtF(total);
+  document.getElementById('drill-total').style.color=total<0?'var(--green)':'var(--text)';
+  document.getElementById('drill-count').textContent=`${rows.length} transaction${rows.length===1?'':'s'}`;
+  document.getElementById('drill-thead').innerHTML=`<tr style="text-align:left">`
+    +['Period','Posting Date','Subsidiary','Vendor','GL Code','Department','Cost Center','Class','Type','Coupa PO','Memo']
+      .map(h=>`<th style="padding:8px 12px">${h}</th>`).join('')
+    +`<th style="padding:8px 12px;text-align:right">Amount (Net)</th></tr>`;
+  document.getElementById('drill-tbody').innerHTML=rows
+    .sort((a,b)=>Math.abs(b.amount)-Math.abs(a.amount))
+    .map((r,i)=>`<tr style="border-top:1px solid var(--border);background:${i%2?'var(--surface2)':''}">
+      <td style="padding:7px 12px">${esc(r.period)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.posting)}</td>
+      <td style="padding:7px 12px;color:var(--text3)">${esc(r.sub)}</td><td style="padding:7px 12px;font-weight:600">${esc(r.vendor)}</td>
+      <td style="padding:7px 12px"><span class="tag tag-gl" style="font-size:10px">${esc(r.account)}</span></td>
+      <td style="padding:7px 12px;color:var(--text3)">${esc(r.dept)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.cc)}</td>
+      <td style="padding:7px 12px;color:var(--text3)">${esc(r.cls)}</td><td style="padding:7px 12px;color:var(--text3)">${esc(r.type)}</td>
+      <td style="padding:7px 12px;color:var(--text3)">${esc(r.coupa)}</td>
+      <td style="padding:7px 12px;color:var(--text3);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.memo)}">${esc(r.memo)}</td>
+      <td style="padding:7px 12px;text-align:right;font-weight:600">${fmtF(r.amount)}</td></tr>`).join('')
+    ||`<tr><td colspan="12" style="padding:24px;text-align:center;color:var(--text3)">No transactions.</td></tr>`;
+  document.getElementById('drill-modal').style.display='block';
+}
+
+// Same treatment as Needs Attention: cap the height so the scrollbar is on screen,
+// and draw our own horizontal bar rather than relying on native scrollbar styling.
+function fitSOTTable(){
+  const w=document.getElementById('sot-scroll-wrap');if(!w||!w.offsetParent)return;
+  const docTop=w.getBoundingClientRect().top+window.scrollY;
+  w.style.maxHeight=Math.max(320,window.innerHeight-docTop-34)+'px';
+  setupSOTHBar();syncSOTHBar();
+}
+function syncSOTHBar(){
+  const w=document.getElementById('sot-scroll-wrap'),bar=document.getElementById('sot-hbar'),th=document.getElementById('sot-hbar-thumb');
+  if(!w||!bar||!th)return;
+  const max=w.scrollWidth-w.clientWidth;
+  if(max<=1||!w.offsetParent){bar.style.display='none';return;}
+  bar.style.display='block';
+  const tw=Math.max(48,Math.round(bar.clientWidth*(w.clientWidth/w.scrollWidth)));
+  th.style.width=tw+'px';
+  th.style.transform='translateX('+Math.round((w.scrollLeft/max)*Math.max(1,bar.clientWidth-tw))+'px)';
+}
+function setupSOTHBar(){
+  const w=document.getElementById('sot-scroll-wrap'),bar=document.getElementById('sot-hbar'),th=document.getElementById('sot-hbar-thumb');
+  if(!w||!bar||!th||bar.dataset.wired)return;
+  bar.dataset.wired='1';
+  let dragging=false,startX=0,startLeft=0;
+  const maxScroll=()=>w.scrollWidth-w.clientWidth;
+  const usable=()=>Math.max(1,bar.clientWidth-th.offsetWidth);
+  w.addEventListener('scroll',()=>{if(!dragging)syncSOTHBar();});
+  th.addEventListener('pointerdown',e=>{
+    dragging=true;startX=e.clientX;startLeft=w.scrollLeft;
+    bar.classList.add('dragging');th.setPointerCapture(e.pointerId);e.preventDefault();e.stopPropagation();
+  });
+  th.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    w.scrollLeft=startLeft+((e.clientX-startX)/usable())*maxScroll();syncSOTHBar();
+  });
+  const end=()=>{dragging=false;bar.classList.remove('dragging');};
+  th.addEventListener('pointerup',end);th.addEventListener('pointercancel',end);
+  bar.addEventListener('pointerdown',e=>{
+    if(e.target===th)return;
+    const r=bar.getBoundingClientRect();
+    w.scrollLeft=Math.min(1,Math.max(0,(e.clientX-r.left-th.offsetWidth/2)/usable()))*maxScroll();syncSOTHBar();
+  });
+  // One delegated handler for every value cell
+  document.getElementById('sot-tbody').addEventListener('click',e=>{
+    const td=e.target.closest('td.pv-val');if(!td||td.dataset.r===undefined)return;
+    drillPivot(+td.dataset.r,+td.dataset.c);
+  });
+}
+window.addEventListener('resize',fitSOTTable);
 
 
 // ── FUZZY VENDOR MATCHING ENGINE ─────────────────────
@@ -2073,6 +2293,7 @@ function goTo(page){
     if(page==='approved')renderApproved();
     else if(page==='attention'){buildAttnData();renderAttention();}
     else if(page==='accruals')renderAccruals();
+    else if(page==='sot')renderSOT(); // must re-run while visible so the table can be measured
   },0);
 }
 load();
