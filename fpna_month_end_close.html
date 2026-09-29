@@ -177,9 +177,14 @@
   .calc-row input,.calc-row select{border:1px solid var(--border);border-radius:var(--rsm);padding:5px 8px;font-size:12px;font-family:inherit;background:var(--surface);}
   .pv-token{font-size:10px;padding:2px 7px;border-radius:99px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;white-space:nowrap;}
   .pv-token:hover{background:var(--accent-light);border-color:var(--accent-border);color:var(--accent);}
+  .pv-grp-btn.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .pv-grp-btn[disabled]{opacity:.45;cursor:not-allowed;}
+  .pv-saved-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--green-light);color:var(--green);border:1px solid var(--green-border);}
   #sot-pivot-table td.pv-calc{text-align:right;background:var(--purple-light);color:var(--purple);font-weight:600;font-variant-numeric:tabular-nums;}
   #sot-pivot-table td.pv-calc-err{color:var(--red);font-weight:700;cursor:help;}
   #sot-pivot-table th.pv-calc-h{background:var(--purple-light);color:var(--purple);}
+  #sot-pivot-table td.pv-grp{text-align:right;background:var(--surface2);font-weight:700;font-variant-numeric:tabular-nums;}
+  #sot-pivot-table th.pv-grp-h{background:var(--surface2);color:var(--text2);}
   #sot-pivot-table tr.pv-sub td{font-weight:700;background:var(--surface2);border-top:1px solid var(--border-strong);}
   #sot-pivot-table tr.pv-sub-l0 td{background:var(--accent-light);color:var(--accent);}
   #sot-pivot-table tr.pv-sub td.pv-rh{background:var(--surface2);}
@@ -613,7 +618,7 @@
               </div>
               <div id="calc-err" style="font-size:11px;color:var(--red);min-height:14px"></div>
             </div>
-            <div class="pv-hint">Drag a field into Rows or Columns to re-pivot · click a value to see the transactions behind it · drag a column edge to resize · &Sigma; on a Rows field adds subtotals · <label>Sort rows <select id="sot-sort" onchange="SOT_SORT=this.value;renderSOT()" style="font-size:11px"><option value="az">A → Z</option><option value="total">Largest first</option></select></label> <button class="btn btn-sm" onclick="resetPivot()">Reset</button></div>
+            <div class="pv-hint">Drag a field into Rows or Columns to re-pivot · click a value to see the transactions behind it · drag a column edge to resize · &Sigma; on a Rows field adds subtotals · <label>Sort rows <select id="sot-sort" onchange="SOT_SORT=this.value;renderSOT()" style="font-size:11px"><option value="az">A → Z</option><option value="total">Largest first</option></select></label> <span id="pv-grp-btns"></span> <button class="btn btn-sm btn-green" onclick="saveSOTView()">Save view</button> <span id="pv-saved"></span> <button class="btn btn-sm" onclick="resetPivot()">Reset to default</button></div>
           </div>
           <div id="sot-scroll-wrap">
             <table id="sot-pivot-table"><thead id="sot-thead"></thead><tbody id="sot-tbody"></tbody></table>
@@ -722,6 +727,7 @@ async function load(){
   if(lsDec&&Object.keys(lsDec).length>0){ACC_DEC=lsDec;console.log(`ACC_DEC loaded from localStorage: ${Object.keys(lsDec).length} entries`);}
   const lsCom=lsLoad(LS_KEY+'_com');
   if(lsCom)COMMENTARY=lsCom;
+  loadSOTView();
   buildVendorMatchTable();
   buildAttnData();
   refreshAll();
@@ -1099,16 +1105,82 @@ const SOT_DEFAULT_ROWS=['vendor'],SOT_DEFAULT_COLS=['period'],SOT_COL_CAP=80;
 let SOT_ROWS_F=[...SOT_DEFAULT_ROWS],SOT_COLS_F=[...SOT_DEFAULT_COLS];
 let SOT_SUBTOT=new Set(),SOT_SORT='az';
 let SOT_CALCS=[],SOT_CALC_SEQ=0,SOT_COL_LABELS=[],SOT_SEQ=[];
+let SOT_GRPS=new Set(),SOT_VIEW_SAVED=false;
 let SOT_PIVOT={rows:[],cols:[]};
 const SOT_SEP='\u0001',BLANK='(blank)';
 const dimLabel=k=>(SOT_DIMS.find(d=>d[0]===k)||[k,k])[1];
 
 function resetPivot(){
   SOT_ROWS_F=[...SOT_DEFAULT_ROWS];SOT_COLS_F=[...SOT_DEFAULT_COLS];
-  SOT_SUBTOT.clear();SOT_SORT='az';SOT_CALCS=[];
+  SOT_SUBTOT.clear();SOT_SORT='az';SOT_CALCS=[];SOT_GRPS.clear();
+  COL_W['sot-pivot-table']={};clearSOTView();
+  clearAllMS('sot');const sq=document.getElementById('sot-search');if(sq)sq.value='';
   const s=document.getElementById('sot-sort');if(s)s.value='az';
   renderSOT();
 }
+
+// ── Period roll-up columns ────────────────────────────────────────────────────
+// Only meaningful when Period is the sole column dimension, since the keys have
+// to be parsed as YYYY-MM. Returns a Map of month -> roll-ups that end at it.
+const SOT_GRP_DEFS=[['q','Quarter'],['h','Half-year'],['y','Year'],['ytd','YTD']];
+const GRP_ORDER={q:0,h:1,y:2,ytd:3};
+function periodGroups(cols,colsF){
+  const out=new Map();
+  if(colsF.length!==1||colsF[0]!=='period'||!SOT_GRPS.size)return out;
+  const buckets=new Map();
+  cols.forEach(c=>{
+    const y=c.slice(0,4),m=parseInt(c.slice(5,7),10);
+    if(!/^\d{4}$/.test(y)||!m)return;
+    const put=(k,label,kind)=>{
+      if(!buckets.has(k))buckets.set(k,{label,kind,members:[]});
+      buckets.get(k).members.push(c);
+    };
+    const yy=y.slice(2);
+    if(SOT_GRPS.has('q'))put('q'+y+Math.ceil(m/3),`Q${Math.ceil(m/3)} '${yy}`,'q');
+    if(SOT_GRPS.has('h'))put('h'+y+Math.ceil(m/6),`H${Math.ceil(m/6)} '${yy}`,'h');
+    if(SOT_GRPS.has('y'))put('y'+y,`FY${y}`,'y');
+    if(SOT_GRPS.has('ytd'))put('t'+y,`${y} YTD`,'ytd');
+  });
+  buckets.forEach(g=>{
+    const last=g.members[g.members.length-1];
+    if(!out.has(last))out.set(last,[]);
+    out.get(last).push(g);
+  });
+  out.forEach(list=>list.sort((a,b)=>GRP_ORDER[a.kind]-GRP_ORDER[b.kind]));
+  return out;
+}
+function toggleGrp(k){SOT_GRPS.has(k)?SOT_GRPS.delete(k):SOT_GRPS.add(k);renderSOT();}
+
+// ── Saved view ────────────────────────────────────────────────────────────────
+// The whole pivot setup, kept in localStorage so a refresh comes back to it.
+function sotViewState(){
+  const f={};SOT_DIMS.forEach(([k])=>{const st=MS_STATE['ms-sot-'+k];if(st&&st.size)f[k]=[...st];});
+  return{rows:[...SOT_ROWS_F],cols:[...SOT_COLS_F],sub:[...SOT_SUBTOT],sort:SOT_SORT,
+    calcs:SOT_CALCS,calcSeq:SOT_CALC_SEQ,grps:[...SOT_GRPS],
+    widths:COL_W['sot-pivot-table']||{},filters:f,search:selVal('sot-search')};
+}
+function applySOTView(v){
+  if(!v)return;
+  if(v.rows)SOT_ROWS_F=[...v.rows];
+  if(v.cols)SOT_COLS_F=[...v.cols];
+  SOT_SUBTOT=new Set(v.sub||[]);
+  SOT_GRPS=new Set(v.grps||[]);
+  SOT_SORT=v.sort||'az';
+  SOT_CALCS=v.calcs||[];SOT_CALC_SEQ=v.calcSeq||SOT_CALCS.length;
+  COL_W['sot-pivot-table']=v.widths||{};
+  Object.entries(v.filters||{}).forEach(([k,vals])=>{MS_STATE['ms-sot-'+k]=new Set(vals);});
+  const s=document.getElementById('sot-search');if(s)s.value=v.search||'';
+}
+function saveSOTView(){
+  try{localStorage.setItem(LS_KEY+'_sotview',JSON.stringify(sotViewState()));SOT_VIEW_SAVED=true;}
+  catch(e){alert('Could not save the view: '+e.message);return;}
+  renderSOT();
+}
+function loadSOTView(){
+  try{const raw=localStorage.getItem(LS_KEY+'_sotview');
+    if(raw){applySOTView(JSON.parse(raw));SOT_VIEW_SAVED=true;}}catch(e){console.warn('saved view ignored:',e);}
+}
+function clearSOTView(){try{localStorage.removeItem(LS_KEY+'_sotview');}catch(e){}SOT_VIEW_SAVED=false;}
 
 // ── Calculated columns ────────────────────────────────────────────────────────
 // A small recursive-descent evaluator over + - * / ( ) , numbers and [Column]
@@ -1233,6 +1305,12 @@ function renderPivotBuilder(){
   document.getElementById('pv-cols').innerHTML=SOT_COLS_F.map((k,i)=>chip(k,'cols',i,1)).join('')
     ||'<span style="font-size:11px;color:var(--text3);padding:4px">drop a field here</span>';
   renderCalcShelf();
+  const periodCols=SOT_COLS_F.length===1&&SOT_COLS_F[0]==='period';
+  const gb=document.getElementById('pv-grp-btns');
+  if(gb)gb.innerHTML='Column totals: '+SOT_GRP_DEFS.map(([k,l])=>
+    `<button class="btn btn-sm pv-grp-btn${SOT_GRPS.has(k)?' on':''}" onclick="toggleGrp('${k}')"${periodCols?'':' disabled title="Put Period on Columns to roll up"'}>${l}</button>`).join(' ');
+  const sv=document.getElementById('pv-saved');
+  if(sv)sv.innerHTML=SOT_VIEW_SAVED?'<span class="pv-saved-badge">saved view active</span>':'';
 }
 
 function wirePivotDnD(){
@@ -1324,24 +1402,36 @@ function renderSOT(){
   SOT_PIVOT={rows,cols,rowsF:[...rowsF],colsF:[...colsF]};
 
   const colLabel=ck=>ck.split(SOT_SEP).map((v,i)=>colsF[i]==='period'?toML(v):v).join(' · ');
-  SOT_COL_LABELS=cols.map(colLabel);
+  // Period roll-ups (quarter / half / year / YTD) become their own columns, each
+  // sitting after the last month it covers.
+  const grpsAt=periodGroups(cols,colsF);
+  // The value columns in display order: months, each followed by any roll-up ending there
+  const valueCols=[];
+  cols.forEach((c,ci)=>{
+    valueCols.push({col:c,ci,label:colLabel(c)});
+    (grpsAt.get(c)||[]).forEach(g=>valueCols.push({grp:g,label:g.label}));
+  });
+  SOT_COL_LABELS=valueCols.map(v=>v.label);
+
   // Interleave the calculated columns at their chosen positions
   const seq=[];
   const nrm=x=>String(x||'').toUpperCase();
-  const anchors=new Set(cols.map(c=>nrm(colLabel(c))));
+  const anchors=new Set(SOT_COL_LABELS.map(nrm));
   const emitCalcs=at=>SOT_CALCS.filter(c=>nrm(c.after)===nrm(at)).forEach(c=>seq.push({calc:c}));
   emitCalcs('__start');
-  cols.forEach((c,ci)=>{seq.push({col:c,ci});emitCalcs(colLabel(c));});
+  valueCols.forEach(v=>{seq.push(v);emitCalcs(v.label);});
   // Explicit end-placed calcs, plus any whose anchor column no longer exists after a
   // re-pivot — they go to the end rather than vanishing from the grid silently.
   SOT_CALCS.forEach(c=>{const a=nrm(c.after);
     if(a==='__TOTAL'||(a!=='__START'&&!anchors.has(a)))seq.push({calc:c});});
   SOT_SEQ=seq;
 
-  // Column values for one row, keyed by the label the formula refers to
+  const grpSum=(g,cells)=>g.members.reduce((s,c)=>s+(cells.get(c)||0),0);
+  // Column values for one row, keyed by the label the formula refers to. Roll-up
+  // columns are addressable too, so a calc can do [FY2026 Total] - [FY2025 Total].
   const varsFor=(cells,total)=>{
     const v={};
-    cols.forEach((c,i)=>{v[SOT_COL_LABELS[i].toUpperCase()]=cells.get(c)||0;});
+    valueCols.forEach(vc=>{v[vc.label.toUpperCase()]=vc.grp?grpSum(vc.grp,cells):(cells.get(vc.col)||0);});
     v['TOTAL']=total;
     return v;
   };
@@ -1357,7 +1447,8 @@ function renderSOT(){
     +(rowsF.length?'':'<th class="pv-rh" style="text-align:left">Total</th>')
     +seq.map(s=>s.calc
       ?`<th class="pv-calc-h" style="text-align:right;min-width:104px" title="${esc(s.calc.formula)}">${esc(s.calc.name)}</th>`
-      :`<th style="text-align:right;min-width:96px">${esc(colLabel(s.col))}</th>`).join('')
+      :s.grp?`<th class="pv-grp-h" style="text-align:right;min-width:110px">${esc(s.grp.label)}</th>`
+      :`<th style="text-align:right;min-width:96px">${esc(s.label)}</th>`).join('')
     +`<th style="text-align:right;min-width:110px;background:var(--surface2)">Total</th></tr>`;
 
   const body=buildPivotBody(rows,rowsF,cols).map(item=>{
@@ -1367,6 +1458,7 @@ function renderSOT(){
       +Array.from({length:Math.max(1,rowsF.length)},(_,i)=>
         `<td class="${i===0?'pv-rh':'td-m'}">${i===item.level?esc(item.vals[item.level])+' Total':''}</td>`).join('')
       +seq.map(s=>s.calc?calcCell(s.calc,item.cells,item.total)
+        :s.grp?`<td class="pv-grp">${fmtF(grpSum(s.grp,item.cells))}</td>`
         :`<td style="text-align:right">${item.cells.get(s.col)===undefined?'—':fmtF(item.cells.get(s.col))}</td>`).join('')
       +`<td style="text-align:right">${fmtF(item.total)}</td></tr>`;
     const row=item.row,ri=item.idx;
@@ -1374,6 +1466,7 @@ function renderSOT(){
       +row.vals.map((v,i)=>`<td class="${i===0?'pv-rh':'td-m'}" title="${esc(v)}">${esc(v)}</td>`).join('')
       +seq.map(s=>{
         if(s.calc)return calcCell(s.calc,row.cells,row.total);
+        if(s.grp)return`<td class="pv-grp">${fmtF(grpSum(s.grp,row.cells))}</td>`;
         const v=row.cells.get(s.col);
         return v===undefined?`<td class="pv-val" style="color:var(--text3)">—</td>`
           :`<td class="pv-val" data-r="${ri}" data-c="${s.ci}" title="Click for transactions">${fmtF(v)}</td>`;}).join('')
@@ -1385,6 +1478,7 @@ function renderSOT(){
       `<td class="${i===0?'pv-rh':'td-m'}">${i===0?'Grand Total':''}</td>`).join('')
     +(()=>{const gt=[...colTot.values()].reduce((s,v)=>s+v,0);
       return seq.map(s2=>s2.calc?calcCell(s2.calc,colTot,gt)
+        :s2.grp?`<td class="pv-grp">${fmtF(grpSum(s2.grp,colTot))}</td>`
         :`<td style="text-align:right">${fmtF(colTot.get(s2.col)||0)}</td>`).join('')
         +`<td style="text-align:right">${fmtF(gt)}</td>`;})()+`</tr>`;
   if(!rows.length)document.getElementById('sot-tbody').innerHTML=
