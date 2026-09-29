@@ -169,6 +169,11 @@
   .pv-chip:active{cursor:grabbing;}
   .pv-zone:not(.pv-pool) .pv-chip{background:var(--accent-light);border-color:var(--accent-border);color:var(--accent);}
   .pv-chip .pv-x{cursor:pointer;opacity:.5;font-weight:700;}
+  .pv-chip .pv-sig{cursor:pointer;opacity:.4;font-weight:700;border:1px solid transparent;border-radius:4px;padding:0 3px;}
+  .pv-chip .pv-sig:hover{opacity:.8;}
+  .pv-chip .pv-sig.on{opacity:1;background:var(--accent);color:#fff;border-color:var(--accent);}
+  #sot-pivot-table tr.pv-sub td{font-weight:700;background:var(--surface2);border-top:1px solid var(--border-strong);}
+  #sot-pivot-table tr.pv-sub-l0 td{background:var(--accent-light);color:var(--accent);}
   .pv-chip .pv-x:hover{opacity:1;}
   .pv-hint{font-size:11px;color:var(--text3);padding-left:74px;display:flex;align-items:center;gap:8px;}
   #sot-scroll-wrap{width:100%;max-height:70vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);}
@@ -578,7 +583,7 @@
               <div class="pv-shelf-label">Columns</div>
               <div class="pv-zone" id="pv-cols" data-zone="cols"></div>
             </div>
-            <div class="pv-hint">Drag a field into Rows or Columns to re-pivot · click a value to see the transactions behind it · drag a column edge to resize · <button class="btn btn-sm" onclick="resetPivot()">Reset</button></div>
+            <div class="pv-hint">Drag a field into Rows or Columns to re-pivot · click a value to see the transactions behind it · drag a column edge to resize · &Sigma; on a Rows field adds subtotals · <label>Sort rows <select id="sot-sort" onchange="SOT_SORT=this.value;renderSOT()" style="font-size:11px"><option value="az">A → Z</option><option value="total">Largest first</option></select></label> <button class="btn btn-sm" onclick="resetPivot()">Reset</button></div>
           </div>
           <div id="sot-scroll-wrap">
             <table id="sot-pivot-table"><thead id="sot-thead"></thead><tbody id="sot-tbody"></tbody></table>
@@ -1062,21 +1067,66 @@ const SOT_DIMS=[['vendor','Vendor'],['period','Period'],['account','GL Code'],['
   ['type','Type'],['inv_type','Invoice Type']];
 const SOT_DEFAULT_ROWS=['vendor'],SOT_DEFAULT_COLS=['period'],SOT_COL_CAP=80;
 let SOT_ROWS_F=[...SOT_DEFAULT_ROWS],SOT_COLS_F=[...SOT_DEFAULT_COLS];
+let SOT_SUBTOT=new Set(),SOT_SORT='az';
 let SOT_PIVOT={rows:[],cols:[]};
 const SOT_SEP='\u0001',BLANK='(blank)';
 const dimLabel=k=>(SOT_DIMS.find(d=>d[0]===k)||[k,k])[1];
 
-function resetPivot(){SOT_ROWS_F=[...SOT_DEFAULT_ROWS];SOT_COLS_F=[...SOT_DEFAULT_COLS];renderSOT();}
+function resetPivot(){
+  SOT_ROWS_F=[...SOT_DEFAULT_ROWS];SOT_COLS_F=[...SOT_DEFAULT_COLS];
+  SOT_SUBTOT.clear();SOT_SORT='az';
+  const s=document.getElementById('sot-sort');if(s)s.value='az';
+  renderSOT();
+}
+
+// Pivot row order. 'az' compares the row values level by level, so nested fields
+// read as blocks the way Excel lays them out; 'total' keeps largest-first.
+function sortPivotRows(rows,mode){
+  if(mode==='total')return[...rows].sort((a,b)=>Math.abs(b.total)-Math.abs(a.total));
+  const coll=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'});
+  return[...rows].sort((a,b)=>{
+    for(let i=0;i<Math.max(a.vals.length,b.vals.length);i++){
+      const c=coll.compare(a.vals[i]||'',b.vals[i]||'');
+      if(c)return c;
+    }
+    return 0;
+  });
+}
+
+// Interleave subtotal rows for whichever row fields have Σ switched on. The
+// innermost field never gets one — its subtotal would just repeat the row.
+function buildPivotBody(rows,rowsF,cols){
+  const levels=rowsF.map((f,i)=>i).filter(i=>i<rowsF.length-1&&SOT_SUBTOT.has(rowsF[i]));
+  if(!levels.length)return rows.map((row,idx)=>({row,idx}));
+  const out=[],acc={};
+  const pre=(r,i)=>r.vals.slice(0,i+1).join(SOT_SEP);
+  const flush=i=>{if(acc[i]){out.push({sub:true,level:i,vals:acc[i].vals,cells:acc[i].cells,total:acc[i].total});acc[i]=null;}};
+  let prev=null;
+  rows.forEach((row,idx)=>{
+    if(prev)for(let i=rowsF.length-2;i>=0;i--)if(levels.includes(i)&&pre(row,i)!==pre(prev,i))flush(i);
+    levels.forEach(i=>{if(!acc[i])acc[i]={vals:row.vals.slice(0,i+1),cells:new Map(),total:0};});
+    out.push({row,idx});
+    levels.forEach(i=>{
+      const a=acc[i];
+      cols.forEach(c=>{const v=row.cells.get(c);if(v!==undefined)a.cells.set(c,(a.cells.get(c)||0)+v);});
+      a.total+=row.total;
+    });
+    prev=row;
+  });
+  levels.slice().reverse().forEach(flush); // deepest group closes first
+  return out;
+}
 
 function renderPivotBuilder(){
   const used=new Set([...SOT_ROWS_F,...SOT_COLS_F]);
-  const chip=(k,zone)=>`<div class="pv-chip" draggable="true" data-k="${k}" data-from="${zone}">${esc(dimLabel(k))}`
+  const chip=(k,zone,i,n)=>`<div class="pv-chip" draggable="true" data-k="${k}" data-from="${zone}">${esc(dimLabel(k))}`
+    +(zone==='rows'&&i<n-1?`<span class="pv-sig${SOT_SUBTOT.has(k)?' on':''}" data-sub="${k}" title="Show a subtotal row for each ${esc(dimLabel(k))}">&Sigma;</span>`:'')
     +(zone==='pool'?'':`<span class="pv-x" data-rm="${k}" data-zone="${zone}" title="Remove">×</span>`)+`</div>`;
-  document.getElementById('pv-pool').innerHTML=SOT_DIMS.filter(d=>!used.has(d[0])).map(d=>chip(d[0],'pool')).join('')
+  document.getElementById('pv-pool').innerHTML=SOT_DIMS.filter(d=>!used.has(d[0])).map(d=>chip(d[0],'pool',0,1)).join('')
     ||'<span style="font-size:11px;color:var(--text3);padding:4px">all fields in use</span>';
-  document.getElementById('pv-rows').innerHTML=SOT_ROWS_F.map(k=>chip(k,'rows')).join('')
+  document.getElementById('pv-rows').innerHTML=SOT_ROWS_F.map((k,i)=>chip(k,'rows',i,SOT_ROWS_F.length)).join('')
     ||'<span style="font-size:11px;color:var(--text3);padding:4px">drop a field here</span>';
-  document.getElementById('pv-cols').innerHTML=SOT_COLS_F.map(k=>chip(k,'cols')).join('')
+  document.getElementById('pv-cols').innerHTML=SOT_COLS_F.map((k,i)=>chip(k,'cols',i,1)).join('')
     ||'<span style="font-size:11px;color:var(--text3);padding:4px">drop a field here</span>';
 }
 
@@ -1107,6 +1157,8 @@ function wirePivotDnD(){
   });
   // × removes a field back to the pool
   b.addEventListener('click',e=>{
+    const sig=e.target.closest('.pv-sig');
+    if(sig){const k=sig.dataset.sub;SOT_SUBTOT.has(k)?SOT_SUBTOT.delete(k):SOT_SUBTOT.add(k);renderSOT();return;}
     const x=e.target.closest('.pv-x');if(!x)return;
     const l=listFor(x.dataset.zone);if(!l)return;
     const i=l.indexOf(x.dataset.rm);if(i>=0)l.splice(i,1);
@@ -1153,8 +1205,12 @@ function renderSOT(){
     cols=(universe.length<=SOT_COL_CAP?universe:[...colTot.keys()])
       .sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
   } else cols=[...colTot.keys()];
-  const allRows=[...rowMap.values()].sort((a,b)=>Math.abs(b.total)-Math.abs(a.total));
-  const rows=allRows.slice(0,SOT_ROW_CAP);
+  const allRows=[...rowMap.values()];
+  // When the cap bites, keep the most material groups — but order what survives the
+  // way a pivot does, so nesting reads as blocks rather than interleaved values.
+  const kept=allRows.length>SOT_ROW_CAP
+    ?[...allRows].sort((a,b)=>Math.abs(b.total)-Math.abs(a.total)).slice(0,SOT_ROW_CAP):allRows;
+  const rows=sortPivotRows(kept,SOT_SORT);
   SOT_PIVOT={rows,cols,rowsF:[...rowsF],colsF:[...colsF]};
 
   const colLabel=ck=>ck.split(SOT_SEP).map((v,i)=>colsF[i]==='period'?toML(v):v).join(' · ');
@@ -1164,12 +1220,19 @@ function renderSOT(){
     +cols.map(c=>`<th style="text-align:right;min-width:96px">${esc(colLabel(c))}</th>`).join('')
     +`<th style="text-align:right;min-width:110px;background:var(--surface2)">Total</th></tr>`;
 
-  const body=rows.map((row,ri)=>`<tr>`
-    +row.vals.map((v,i)=>`<td class="${i===0?'pv-rh':'td-m'}" title="${esc(v)}">${esc(v)}</td>`).join('')
-    +cols.map((c,ci)=>{const v=row.cells.get(c);
-      return v===undefined?`<td class="pv-val" style="color:var(--text3)">—</td>`
-        :`<td class="pv-val" data-r="${ri}" data-c="${ci}" title="Click for transactions">${fmtF(v)}</td>`;}).join('')
-    +`<td class="pv-tot">${fmtF(row.total)}</td></tr>`).join('');
+  const body=buildPivotBody(rows,rowsF,cols).map(item=>{
+    if(item.sub)return`<tr class="pv-sub pv-sub-l${item.level}">`
+      +`<td class="pv-rh" colspan="${rowsF.length}">${esc(item.vals[item.level])} Total</td>`
+      +cols.map(c=>{const v=item.cells.get(c);return`<td style="text-align:right">${v===undefined?'—':fmtF(v)}</td>`;}).join('')
+      +`<td style="text-align:right">${fmtF(item.total)}</td></tr>`;
+    const row=item.row,ri=item.idx;
+    return`<tr>`
+      +row.vals.map((v,i)=>`<td class="${i===0?'pv-rh':'td-m'}" title="${esc(v)}">${esc(v)}</td>`).join('')
+      +cols.map((c,ci)=>{const v=row.cells.get(c);
+        return v===undefined?`<td class="pv-val" style="color:var(--text3)">—</td>`
+          :`<td class="pv-val" data-r="${ri}" data-c="${ci}" title="Click for transactions">${fmtF(v)}</td>`;}).join('')
+      +`<td class="pv-tot">${fmtF(row.total)}</td></tr>`;
+  }).join('');
   document.getElementById('sot-tbody').innerHTML=body
     +`<tr class="pv-grand"><td class="pv-rh" ${rowsF.length>1?`colspan="${rowsF.length}"`:''}>Grand Total</td>`
     +cols.map(c=>`<td style="text-align:right">${fmtF(colTot.get(c)||0)}</td>`).join('')
