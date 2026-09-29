@@ -192,6 +192,9 @@
   #sot-pivot-table tr.pv-grand td.pv-rh{background:var(--surface2);}
   .pv-chip .pv-x:hover{opacity:1;}
   .pv-hint{font-size:11px;color:var(--text3);padding-left:74px;display:flex;align-items:center;gap:8px;}
+  #sot-bar{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;}
+  #sot-bar-summary{font-size:11px;color:var(--text3);}
+  #sot-bar-summary b{color:var(--text2);font-weight:700;}
   #sot-scroll-wrap{width:100%;max-height:70vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);}
   #sot-scroll-wrap::-webkit-scrollbar{height:14px;width:14px;}
   #sot-scroll-wrap::-webkit-scrollbar-track{background:var(--surface2);border-radius:7px;}
@@ -573,6 +576,7 @@
       <div class="page" id="page-sot">
         <div id="sot-empty" class="empty" style="display:none"><h3>Upload AP Details first</h3></div>
         <div id="sot-content">
+          <div id="sot-controls">
           <div class="alert al-info mb12">Complete 12-month AP actuals — your single source of truth. Filter by any dimension.</div>
           <div class="filter-bar">
             <input type="text" id="sot-search" placeholder="Search vendor / memo / GL…" oninput="renderSOT()" style="min-width:160px">
@@ -618,7 +622,17 @@
               </div>
               <div id="calc-err" style="font-size:11px;color:var(--red);min-height:14px"></div>
             </div>
-            <div class="pv-hint">Drag a field into Rows or Columns to re-pivot · click a value to see the transactions behind it · drag a column edge to resize · &Sigma; on a Rows field adds subtotals · <label>Sort rows <select id="sot-sort" onchange="SOT_SORT=this.value;renderSOT()" style="font-size:11px"><option value="az">A → Z</option><option value="total">Largest first</option></select></label> <span id="pv-grp-btns"></span> <button class="btn btn-sm btn-green" onclick="saveSOTView()">Save view</button> <span id="pv-saved"></span> <button class="btn btn-sm" onclick="resetPivot()">Reset to default</button></div>
+            <div class="pv-hint">Drag a field into Rows or Columns to re-pivot · click a value to see the transactions behind it · drag a column edge to resize · &Sigma; on a Rows field adds subtotals · <label>Sort rows <select id="sot-sort" onchange="SOT_SORT=this.value;renderSOT()" style="font-size:11px"><option value="az">A → Z</option><option value="total">Largest first</option></select></label> <span id="pv-grp-btns"></span></div>
+          </div>
+          </div><!-- /sot-controls -->
+          <div id="sot-bar">
+            <button class="btn btn-sm" onclick="toggleSOTControls()" id="sot-toggle-btn">Hide controls</button>
+            <span id="sot-bar-summary"></span>
+            <span style="margin-left:auto;display:flex;gap:8px;align-items:center">
+              <span id="pv-saved"></span>
+              <button class="btn btn-sm btn-green" onclick="saveSOTView()">Save view</button>
+              <button class="btn btn-sm" onclick="resetPivot()">Reset to default</button>
+            </span>
           </div>
           <div id="sot-scroll-wrap">
             <table id="sot-pivot-table"><thead id="sot-thead"></thead><tbody id="sot-tbody"></tbody></table>
@@ -1105,7 +1119,7 @@ const SOT_DEFAULT_ROWS=['vendor'],SOT_DEFAULT_COLS=['period'],SOT_COL_CAP=80;
 let SOT_ROWS_F=[...SOT_DEFAULT_ROWS],SOT_COLS_F=[...SOT_DEFAULT_COLS];
 let SOT_SUBTOT=new Set(),SOT_SORT='az';
 let SOT_CALCS=[],SOT_CALC_SEQ=0,SOT_COL_LABELS=[],SOT_SEQ=[];
-let SOT_GRPS=new Set(),SOT_VIEW_SAVED=false;
+let SOT_GRPS=new Set(),SOT_VIEW_SAVED=false,SOT_CTRL_HIDDEN=false;
 let SOT_PIVOT={rows:[],cols:[]};
 const SOT_SEP='\u0001',BLANK='(blank)';
 const dimLabel=k=>(SOT_DIMS.find(d=>d[0]===k)||[k,k])[1];
@@ -1113,7 +1127,7 @@ const dimLabel=k=>(SOT_DIMS.find(d=>d[0]===k)||[k,k])[1];
 function resetPivot(){
   SOT_ROWS_F=[...SOT_DEFAULT_ROWS];SOT_COLS_F=[...SOT_DEFAULT_COLS];
   SOT_SUBTOT.clear();SOT_SORT='az';SOT_CALCS=[];SOT_GRPS.clear();
-  COL_W['sot-pivot-table']={};clearSOTView();
+  COL_W['sot-pivot-table']={};SOT_CTRL_HIDDEN=false;clearSOTView();
   clearAllMS('sot');const sq=document.getElementById('sot-search');if(sq)sq.value='';
   const s=document.getElementById('sot-sort');if(s)s.value='az';
   renderSOT();
@@ -1151,13 +1165,36 @@ function periodGroups(cols,colsF){
 }
 function toggleGrp(k){SOT_GRPS.has(k)?SOT_GRPS.delete(k):SOT_GRPS.add(k);renderSOT();}
 
+// Collapse the filters, tiles and pivot builder so the grid gets the whole screen.
+// While hidden, the bar summarises the view so it is never unclear what is shown.
+function toggleSOTControls(v){
+  SOT_CTRL_HIDDEN=v===undefined?!SOT_CTRL_HIDDEN:!!v;
+  applySOTControls();fitSOTTable();
+}
+function applySOTControls(){
+  const c=document.getElementById('sot-controls');if(!c)return;
+  c.style.display=SOT_CTRL_HIDDEN?'none':'';
+  const btn=document.getElementById('sot-toggle-btn');
+  if(btn)btn.textContent=SOT_CTRL_HIDDEN?'▾ Show controls':'▴ Hide controls';
+  const sum=document.getElementById('sot-bar-summary');
+  if(!sum)return;
+  if(!SOT_CTRL_HIDDEN){sum.textContent='';return;}
+  const nf=SOT_DIMS.filter(([f])=>MS_STATE['ms-sot-'+f]&&MS_STATE['ms-sot-'+f].size).length;
+  const q=selVal('sot-search');
+  sum.innerHTML=`<b>Rows</b> ${esc(SOT_ROWS_F.map(dimLabel).join(' › ')||'—')}`
+    +` &nbsp;<b>Columns</b> ${esc(SOT_COLS_F.map(dimLabel).join(' › ')||'—')}`
+    +(SOT_GRPS.size?` &nbsp;<b>Totals</b> ${[...SOT_GRPS].map(k=>(SOT_GRP_DEFS.find(d=>d[0]===k)||[,k])[1]).join(', ')}`:'')
+    +(SOT_CALCS.length?` &nbsp;<b>Calc</b> ${SOT_CALCS.length}`:'')
+    +(nf||q?` &nbsp;<span style="color:var(--accent)"><b>Filtered</b>${nf?' '+nf+' field'+(nf===1?'':'s'):''}${q?' + search':''}</span>`:'');
+}
+
 // ── Saved view ────────────────────────────────────────────────────────────────
 // The whole pivot setup, kept in localStorage so a refresh comes back to it.
 function sotViewState(){
   const f={};SOT_DIMS.forEach(([k])=>{const st=MS_STATE['ms-sot-'+k];if(st&&st.size)f[k]=[...st];});
   return{rows:[...SOT_ROWS_F],cols:[...SOT_COLS_F],sub:[...SOT_SUBTOT],sort:SOT_SORT,
     calcs:SOT_CALCS,calcSeq:SOT_CALC_SEQ,grps:[...SOT_GRPS],
-    widths:COL_W['sot-pivot-table']||{},filters:f,search:selVal('sot-search')};
+    widths:COL_W['sot-pivot-table']||{},filters:f,search:selVal('sot-search'),hidden:SOT_CTRL_HIDDEN};
 }
 function applySOTView(v){
   if(!v)return;
@@ -1170,6 +1207,7 @@ function applySOTView(v){
   COL_W['sot-pivot-table']=v.widths||{};
   Object.entries(v.filters||{}).forEach(([k,vals])=>{MS_STATE['ms-sot-'+k]=new Set(vals);});
   const s=document.getElementById('sot-search');if(s)s.value=v.search||'';
+  SOT_CTRL_HIDDEN=!!v.hidden;
 }
 function saveSOTView(){
   try{localStorage.setItem(LS_KEY+'_sotview',JSON.stringify(sotViewState()));SOT_VIEW_SAVED=true;}
@@ -1305,6 +1343,7 @@ function renderPivotBuilder(){
   document.getElementById('pv-cols').innerHTML=SOT_COLS_F.map((k,i)=>chip(k,'cols',i,1)).join('')
     ||'<span style="font-size:11px;color:var(--text3);padding:4px">drop a field here</span>';
   renderCalcShelf();
+  applySOTControls();
   const periodCols=SOT_COLS_F.length===1&&SOT_COLS_F[0]==='period';
   const gb=document.getElementById('pv-grp-btns');
   if(gb)gb.innerHTML='Column totals: '+SOT_GRP_DEFS.map(([k,l])=>
