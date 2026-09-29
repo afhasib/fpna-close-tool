@@ -174,6 +174,9 @@
   .pv-chip .pv-sig.on{opacity:1;background:var(--accent);color:#fff;border-color:var(--accent);}
   #sot-pivot-table tr.pv-sub td{font-weight:700;background:var(--surface2);border-top:1px solid var(--border-strong);}
   #sot-pivot-table tr.pv-sub-l0 td{background:var(--accent-light);color:var(--accent);}
+  #sot-pivot-table tr.pv-sub td.pv-rh{background:var(--surface2);}
+  #sot-pivot-table tr.pv-sub-l0 td.pv-rh{background:var(--accent-light);}
+  #sot-pivot-table tr.pv-grand td.pv-rh{background:var(--surface2);}
   .pv-chip .pv-x:hover{opacity:1;}
   .pv-hint{font-size:11px;color:var(--text3);padding-left:74px;display:flex;align-items:center;gap:8px;}
   #sot-scroll-wrap{width:100%;max-height:70vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);}
@@ -1221,8 +1224,11 @@ function renderSOT(){
     +`<th style="text-align:right;min-width:110px;background:var(--surface2)">Total</th></tr>`;
 
   const body=buildPivotBody(rows,rowsF,cols).map(item=>{
+    // One cell per row field rather than a colspan: the first is sticky, and a
+    // sticky cell spanning several columns would sit over the data as it scrolls.
     if(item.sub)return`<tr class="pv-sub pv-sub-l${item.level}">`
-      +`<td class="pv-rh" colspan="${rowsF.length}">${esc(item.vals[item.level])} Total</td>`
+      +Array.from({length:Math.max(1,rowsF.length)},(_,i)=>
+        `<td class="${i===0?'pv-rh':'td-m'}">${i===item.level?esc(item.vals[item.level])+' Total':''}</td>`).join('')
       +cols.map(c=>{const v=item.cells.get(c);return`<td style="text-align:right">${v===undefined?'—':fmtF(v)}</td>`;}).join('')
       +`<td style="text-align:right">${fmtF(item.total)}</td></tr>`;
     const row=item.row,ri=item.idx;
@@ -1234,7 +1240,9 @@ function renderSOT(){
       +`<td class="pv-tot">${fmtF(row.total)}</td></tr>`;
   }).join('');
   document.getElementById('sot-tbody').innerHTML=body
-    +`<tr class="pv-grand"><td class="pv-rh" ${rowsF.length>1?`colspan="${rowsF.length}"`:''}>Grand Total</td>`
+    +`<tr class="pv-grand">`
+    +Array.from({length:Math.max(1,rowsF.length)},(_,i)=>
+      `<td class="${i===0?'pv-rh':'td-m'}">${i===0?'Grand Total':''}</td>`).join('')
     +cols.map(c=>`<td style="text-align:right">${fmtF(colTot.get(c)||0)}</td>`).join('')
     +`<td style="text-align:right">${fmtF([...colTot.values()].reduce((s,v)=>s+v,0))}</td></tr>`;
   if(!rows.length)document.getElementById('sot-tbody').innerHTML=
@@ -1787,7 +1795,7 @@ const colKey=th=>(th.textContent||'').replace(/[▲▼↕⇅▶◀×]/g,'').repl
 const RESIZE_ATTN={table:'attn-main-table',head:'#attn-thead tr:nth-child(2) th',
   headRow:'thead tr:nth-child(2)',body:'tbody td',styleId:'attn-col-style',after:()=>syncAttnHBar()};
 const RESIZE_SOT={table:'sot-pivot-table',head:'#sot-thead tr th',
-  headRow:'thead tr',body:'tbody tr:not(.pv-grand) td',styleId:'sot-col-style',after:()=>syncSOTHBar()};
+  headRow:'thead tr',body:'tbody td',styleId:'sot-col-style',after:()=>syncSOTHBar()};
 
 function applyColWidths(cfg){
   const st=document.getElementById(cfg.styleId);if(!st)return;
