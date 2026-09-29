@@ -172,6 +172,14 @@
   .pv-chip .pv-sig{cursor:pointer;opacity:.4;font-weight:700;border:1px solid transparent;border-radius:4px;padding:0 3px;}
   .pv-chip .pv-sig:hover{opacity:.8;}
   .pv-chip .pv-sig.on{opacity:1;background:var(--accent);color:#fff;border-color:var(--accent);}
+  .pv-chip-calc{background:var(--purple-light)!important;border-color:var(--purple-border)!important;color:var(--purple)!important;cursor:default;}
+  .calc-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0 0 74px;}
+  .calc-row input,.calc-row select{border:1px solid var(--border);border-radius:var(--rsm);padding:5px 8px;font-size:12px;font-family:inherit;background:var(--surface);}
+  .pv-token{font-size:10px;padding:2px 7px;border-radius:99px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;white-space:nowrap;}
+  .pv-token:hover{background:var(--accent-light);border-color:var(--accent-border);color:var(--accent);}
+  #sot-pivot-table td.pv-calc{text-align:right;background:var(--purple-light);color:var(--purple);font-weight:600;font-variant-numeric:tabular-nums;}
+  #sot-pivot-table td.pv-calc-err{color:var(--red);font-weight:700;cursor:help;}
+  #sot-pivot-table th.pv-calc-h{background:var(--purple-light);color:var(--purple);}
   #sot-pivot-table tr.pv-sub td{font-weight:700;background:var(--surface2);border-top:1px solid var(--border-strong);}
   #sot-pivot-table tr.pv-sub-l0 td{background:var(--accent-light);color:var(--accent);}
   #sot-pivot-table tr.pv-sub td.pv-rh{background:var(--surface2);}
@@ -585,6 +593,25 @@
             <div class="pv-shelf">
               <div class="pv-shelf-label">Columns</div>
               <div class="pv-zone" id="pv-cols" data-zone="cols"></div>
+            </div>
+            <div class="pv-shelf">
+              <div class="pv-shelf-label">Calc</div>
+              <div class="pv-zone pv-pool" id="pv-calcs"></div>
+            </div>
+            <div id="calc-editor" style="display:none">
+              <div class="calc-row">
+                <input id="calc-name" placeholder="Column name, e.g. Aug 26 + Aug 25" style="min-width:210px">
+                <input id="calc-formula" placeholder="Formula, e.g. [AUG '26] + [AUG '25]" style="flex:1;min-width:260px">
+                <select id="calc-fmt"><option value="cur">Currency</option><option value="num">Number</option><option value="pct">Percent</option></select>
+                <select id="calc-after"></select>
+                <button class="btn btn-primary btn-sm" onclick="saveCalcColumn()">Add</button>
+                <button class="btn btn-sm" onclick="closeCalcEditor()">Cancel</button>
+              </div>
+              <div class="calc-row" style="align-items:flex-start">
+                <span style="font-size:11px;color:var(--text3);padding-top:3px;white-space:nowrap">Click to insert:</span>
+                <div id="calc-tokens" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+              </div>
+              <div id="calc-err" style="font-size:11px;color:var(--red);min-height:14px"></div>
             </div>
             <div class="pv-hint">Drag a field into Rows or Columns to re-pivot · click a value to see the transactions behind it · drag a column edge to resize · &Sigma; on a Rows field adds subtotals · <label>Sort rows <select id="sot-sort" onchange="SOT_SORT=this.value;renderSOT()" style="font-size:11px"><option value="az">A → Z</option><option value="total">Largest first</option></select></label> <button class="btn btn-sm" onclick="resetPivot()">Reset</button></div>
           </div>
@@ -1071,15 +1098,89 @@ const SOT_DIMS=[['vendor','Vendor'],['period','Period'],['account','GL Code'],['
 const SOT_DEFAULT_ROWS=['vendor'],SOT_DEFAULT_COLS=['period'],SOT_COL_CAP=80;
 let SOT_ROWS_F=[...SOT_DEFAULT_ROWS],SOT_COLS_F=[...SOT_DEFAULT_COLS];
 let SOT_SUBTOT=new Set(),SOT_SORT='az';
+let SOT_CALCS=[],SOT_CALC_SEQ=0,SOT_COL_LABELS=[],SOT_SEQ=[];
 let SOT_PIVOT={rows:[],cols:[]};
 const SOT_SEP='\u0001',BLANK='(blank)';
 const dimLabel=k=>(SOT_DIMS.find(d=>d[0]===k)||[k,k])[1];
 
 function resetPivot(){
   SOT_ROWS_F=[...SOT_DEFAULT_ROWS];SOT_COLS_F=[...SOT_DEFAULT_COLS];
-  SOT_SUBTOT.clear();SOT_SORT='az';
+  SOT_SUBTOT.clear();SOT_SORT='az';SOT_CALCS=[];
   const s=document.getElementById('sot-sort');if(s)s.value='az';
   renderSOT();
+}
+
+// ── Calculated columns ────────────────────────────────────────────────────────
+// A small recursive-descent evaluator over + - * / ( ) , numbers and [Column]
+// references. Deliberately not eval(): a typo should surface as a message on the
+// cell, not execute arbitrary script.
+function evalFormula(expr,vars){
+  const t=[];let i=0;
+  while(i<expr.length){
+    const c=expr[i];
+    if(/\s/.test(c)){i++;continue;}
+    if(c==='['){const j=expr.indexOf(']',i);if(j<0)throw new Error('unclosed [');t.push({t:'v',v:expr.slice(i+1,j).trim()});i=j+1;continue;}
+    if(/[0-9.]/.test(c)){let j=i;while(j<expr.length&&/[0-9.]/.test(expr[j]))j++;t.push({t:'n',v:parseFloat(expr.slice(i,j))});i=j;continue;}
+    if('+-*/()'.includes(c)){t.push({t:c});i++;continue;}
+    throw new Error('unexpected character "'+c+'"');
+  }
+  let p=0;
+  const peek=()=>t[p];
+  function primary(){
+    const tk=t[p];
+    if(!tk)throw new Error('formula ends early');
+    if(tk.t==='n'){p++;return tk.v;}
+    if(tk.t==='v'){p++;const k=tk.v.toUpperCase();
+      if(!(k in vars))throw new Error('no column called "'+tk.v+'"');
+      return vars[k];}
+    if(tk.t==='('){p++;const v=sum();if(!t[p]||t[p].t!==')')throw new Error('expected )');p++;return v;}
+    if(tk.t==='-'){p++;return -primary();}
+    if(tk.t==='+'){p++;return primary();}
+    throw new Error('unexpected "'+tk.t+'"');
+  }
+  function prod(){let v=primary();while(peek()&&(peek().t==='*'||peek().t==='/')){const op=t[p++].t;const r=primary();v=op==='*'?v*r:(r===0?NaN:v/r);}return v;}
+  function sum(){let v=prod();while(peek()&&(peek().t==='+'||peek().t==='-')){const op=t[p++].t;const r=prod();v=op==='+'?v+r:v-r;}return v;}
+  const out=sum();
+  if(p<t.length)throw new Error('unexpected trailing input');
+  return out;
+}
+
+function calcVarNames(){return[...SOT_COL_LABELS,'Total'];}
+
+function renderCalcShelf(){
+  const zone=document.getElementById('pv-calcs');if(!zone)return;
+  zone.innerHTML=SOT_CALCS.map(c=>`<div class="pv-chip pv-chip-calc" data-calc="${c.id}" title="${esc(c.formula)}">`
+    +`${esc(c.name)}<span class="pv-x" data-calcrm="${c.id}" title="Remove">×</span></div>`).join('')
+    +`<button class="btn btn-sm" onclick="openCalcEditor()">+ Calculated column</button>`;
+}
+
+function openCalcEditor(){
+  const box=document.getElementById('calc-editor');if(!box)return;
+  box.style.display='block';
+  document.getElementById('calc-name').value='';
+  document.getElementById('calc-formula').value='';
+  document.getElementById('calc-err').textContent='';
+  document.getElementById('calc-after').innerHTML=
+    `<option value="__start">at the start</option>`
+    +SOT_COL_LABELS.map(l=>`<option value="${esc(l)}">after ${esc(l)}</option>`).join('')
+    +`<option value="__total" selected>at the end</option>`;
+  document.getElementById('calc-tokens').innerHTML=calcVarNames()
+    .map(l=>`<span class="pv-token" data-tok="${esc(l)}">${esc(l)}</span>`).join('');
+  document.getElementById('calc-name').focus();
+}
+function closeCalcEditor(){const b=document.getElementById('calc-editor');if(b)b.style.display='none';}
+
+function saveCalcColumn(){
+  const name=document.getElementById('calc-name').value.trim();
+  const formula=document.getElementById('calc-formula').value.trim();
+  const err=document.getElementById('calc-err');
+  if(!name||!formula){err.textContent='Give the column a name and a formula.';return;}
+  // Dry-run against dummy values so a bad formula is caught here, not per cell
+  const probe={};calcVarNames().forEach(l=>{probe[l.toUpperCase()]=1;});
+  try{evalFormula(formula,probe);}catch(e){err.textContent=e.message;return;}
+  SOT_CALCS.push({id:'c'+(++SOT_CALC_SEQ),name,formula,
+    after:document.getElementById('calc-after').value,fmt:document.getElementById('calc-fmt').value});
+  closeCalcEditor();renderSOT();
 }
 
 // Pivot row order. 'az' compares the row values level by level, so nested fields
@@ -1131,6 +1232,7 @@ function renderPivotBuilder(){
     ||'<span style="font-size:11px;color:var(--text3);padding:4px">drop a field here</span>';
   document.getElementById('pv-cols').innerHTML=SOT_COLS_F.map((k,i)=>chip(k,'cols',i,1)).join('')
     ||'<span style="font-size:11px;color:var(--text3);padding:4px">drop a field here</span>';
+  renderCalcShelf();
 }
 
 function wirePivotDnD(){
@@ -1162,6 +1264,11 @@ function wirePivotDnD(){
   b.addEventListener('click',e=>{
     const sig=e.target.closest('.pv-sig');
     if(sig){const k=sig.dataset.sub;SOT_SUBTOT.has(k)?SOT_SUBTOT.delete(k):SOT_SUBTOT.add(k);renderSOT();return;}
+    const crm=e.target.closest('[data-calcrm]');
+    if(crm){SOT_CALCS=SOT_CALCS.filter(c=>c.id!==crm.dataset.calcrm);renderSOT();return;}
+    const tok=e.target.closest('.pv-token');
+    if(tok){const f=document.getElementById('calc-formula');
+      f.value=(f.value+(f.value&&!/[\s+\-*/(]$/.test(f.value)?' + ':'')+'['+tok.dataset.tok+']');f.focus();return;}
     const x=e.target.closest('.pv-x');if(!x)return;
     const l=listFor(x.dataset.zone);if(!l)return;
     const i=l.indexOf(x.dataset.rm);if(i>=0)l.splice(i,1);
@@ -1217,10 +1324,40 @@ function renderSOT(){
   SOT_PIVOT={rows,cols,rowsF:[...rowsF],colsF:[...colsF]};
 
   const colLabel=ck=>ck.split(SOT_SEP).map((v,i)=>colsF[i]==='period'?toML(v):v).join(' · ');
+  SOT_COL_LABELS=cols.map(colLabel);
+  // Interleave the calculated columns at their chosen positions
+  const seq=[];
+  const nrm=x=>String(x||'').toUpperCase();
+  const anchors=new Set(cols.map(c=>nrm(colLabel(c))));
+  const emitCalcs=at=>SOT_CALCS.filter(c=>nrm(c.after)===nrm(at)).forEach(c=>seq.push({calc:c}));
+  emitCalcs('__start');
+  cols.forEach((c,ci)=>{seq.push({col:c,ci});emitCalcs(colLabel(c));});
+  // Explicit end-placed calcs, plus any whose anchor column no longer exists after a
+  // re-pivot — they go to the end rather than vanishing from the grid silently.
+  SOT_CALCS.forEach(c=>{const a=nrm(c.after);
+    if(a==='__TOTAL'||(a!=='__START'&&!anchors.has(a)))seq.push({calc:c});});
+  SOT_SEQ=seq;
+
+  // Column values for one row, keyed by the label the formula refers to
+  const varsFor=(cells,total)=>{
+    const v={};
+    cols.forEach((c,i)=>{v[SOT_COL_LABELS[i].toUpperCase()]=cells.get(c)||0;});
+    v['TOTAL']=total;
+    return v;
+  };
+  const calcCell=(calc,cells,total)=>{
+    let n;
+    try{n=evalFormula(calc.formula,varsFor(cells,total));}catch(e){return`<td class="pv-calc pv-calc-err" title="${esc(e.message)}">!</td>`;}
+    if(!isFinite(n))return`<td class="pv-calc" style="color:var(--text3)">—</td>`;
+    return`<td class="pv-calc">${calc.fmt==='pct'?(n*100).toFixed(1)+'%':calc.fmt==='num'?Math.round(n).toLocaleString():fmtF(n)}</td>`;
+  };
+
   document.getElementById('sot-thead').innerHTML=`<tr>`
     +rowsF.map((f,i)=>`<th class="${i===0?'pv-rh':''}" style="text-align:left;min-width:180px">${esc(dimLabel(f))}</th>`).join('')
     +(rowsF.length?'':'<th class="pv-rh" style="text-align:left">Total</th>')
-    +cols.map(c=>`<th style="text-align:right;min-width:96px">${esc(colLabel(c))}</th>`).join('')
+    +seq.map(s=>s.calc
+      ?`<th class="pv-calc-h" style="text-align:right;min-width:104px" title="${esc(s.calc.formula)}">${esc(s.calc.name)}</th>`
+      :`<th style="text-align:right;min-width:96px">${esc(colLabel(s.col))}</th>`).join('')
     +`<th style="text-align:right;min-width:110px;background:var(--surface2)">Total</th></tr>`;
 
   const body=buildPivotBody(rows,rowsF,cols).map(item=>{
@@ -1229,24 +1366,29 @@ function renderSOT(){
     if(item.sub)return`<tr class="pv-sub pv-sub-l${item.level}">`
       +Array.from({length:Math.max(1,rowsF.length)},(_,i)=>
         `<td class="${i===0?'pv-rh':'td-m'}">${i===item.level?esc(item.vals[item.level])+' Total':''}</td>`).join('')
-      +cols.map(c=>{const v=item.cells.get(c);return`<td style="text-align:right">${v===undefined?'—':fmtF(v)}</td>`;}).join('')
+      +seq.map(s=>s.calc?calcCell(s.calc,item.cells,item.total)
+        :`<td style="text-align:right">${item.cells.get(s.col)===undefined?'—':fmtF(item.cells.get(s.col))}</td>`).join('')
       +`<td style="text-align:right">${fmtF(item.total)}</td></tr>`;
     const row=item.row,ri=item.idx;
     return`<tr>`
       +row.vals.map((v,i)=>`<td class="${i===0?'pv-rh':'td-m'}" title="${esc(v)}">${esc(v)}</td>`).join('')
-      +cols.map((c,ci)=>{const v=row.cells.get(c);
+      +seq.map(s=>{
+        if(s.calc)return calcCell(s.calc,row.cells,row.total);
+        const v=row.cells.get(s.col);
         return v===undefined?`<td class="pv-val" style="color:var(--text3)">—</td>`
-          :`<td class="pv-val" data-r="${ri}" data-c="${ci}" title="Click for transactions">${fmtF(v)}</td>`;}).join('')
+          :`<td class="pv-val" data-r="${ri}" data-c="${s.ci}" title="Click for transactions">${fmtF(v)}</td>`;}).join('')
       +`<td class="pv-tot">${fmtF(row.total)}</td></tr>`;
   }).join('');
   document.getElementById('sot-tbody').innerHTML=body
     +`<tr class="pv-grand">`
     +Array.from({length:Math.max(1,rowsF.length)},(_,i)=>
       `<td class="${i===0?'pv-rh':'td-m'}">${i===0?'Grand Total':''}</td>`).join('')
-    +cols.map(c=>`<td style="text-align:right">${fmtF(colTot.get(c)||0)}</td>`).join('')
-    +`<td style="text-align:right">${fmtF([...colTot.values()].reduce((s,v)=>s+v,0))}</td></tr>`;
+    +(()=>{const gt=[...colTot.values()].reduce((s,v)=>s+v,0);
+      return seq.map(s2=>s2.calc?calcCell(s2.calc,colTot,gt)
+        :`<td style="text-align:right">${fmtF(colTot.get(s2.col)||0)}</td>`).join('')
+        +`<td style="text-align:right">${fmtF(gt)}</td>`;})()+`</tr>`;
   if(!rows.length)document.getElementById('sot-tbody').innerHTML=
-    `<tr><td colspan="${rowsF.length+cols.length+1}" style="padding:24px;text-align:center;color:var(--text3)">No transactions match these filters.</td></tr>`;
+    `<tr><td colspan="${Math.max(1,rowsF.length)+seq.length+1}" style="padding:24px;text-align:center;color:var(--text3)">No transactions match these filters.</td></tr>`;
 
   document.getElementById('sot-lbl').textContent=
     `${allRows.length.toLocaleString()} ${rowsF.map(dimLabel).join(' × ')||'row'} group${allRows.length===1?'':'s'} · `
