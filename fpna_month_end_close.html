@@ -2396,14 +2396,14 @@ function renderDollarView(threshold,dirFilter){
   const tl=(s='')=>`style="padding:5px 8px;text-align:left;white-space:nowrap;${s}"`;
   const actMonthThs=actHide?'':actPeriods.map((p,i)=>`<th ${tr(i===0?'border-left:1px solid var(--border);color:var(--text3)':'color:var(--text3)')}>${toML(p)}</th>`).join('');
   const fcstMonthThs=fcstHide?'':fcstPeriods.map((p,i)=>`<th ${tr(i===0?'border-left:1px solid var(--border);color:var(--blue)':'color:var(--blue)')}>${toML(p)}</th>`).join('');
-  const actGrpCols=actHide?1:actPeriods.length+1;
-  const fcstGrpCols=fcstHide?1:fcstPeriods.length+1;
+  const actGrpCols=actHide?2:actPeriods.length+2;
+  const fcstGrpCols=fcstHide?2:fcstPeriods.length+2;
   document.getElementById('attn-thead').innerHTML=`
   <tr style="background:var(--surface2);font-size:10px">
-    <th colspan="4" ${tl()}>VENDOR / GL / DEPARTMENT</th>
+    <th ${tl()}>VENDOR / GL / DEPARTMENT</th><th colspan="3" ${tl()}></th>
     <th colspan="${actGrpCols}" style="padding:5px 8px;text-align:center;border-left:2px solid var(--border);background:var(--surface2);cursor:pointer;color:var(--text2)" onclick="toggleAttnCols('act')" title="Click to collapse/expand">${actHide?'▶':'▼'} ACTUALS (12 MONTHS)</th>
     <th colspan="${fcstGrpCols}" style="padding:5px 8px;text-align:center;border-left:2px solid #bfdbfe;background:var(--blue-light);cursor:pointer;color:var(--blue)" onclick="toggleAttnCols('fcst')" title="Click to collapse/expand">${fcstHide?'▶':'▼'} FORECAST (12 MONTHS)</th>
-    <th colspan="4" style="padding:5px 8px;text-align:center;border-left:2px solid var(--accent);background:var(--accent-light);color:var(--accent)">VARIANCE SUMMARY</th>
+    <th colspan="2" style="padding:5px 8px;text-align:center;border-left:2px solid var(--accent);background:var(--accent-light);color:var(--accent)">VARIANCE SUMMARY</th>
     <th colspan="2" style="padding:5px 8px;background:var(--surface2)"></th>
   </tr>
   <tr style="background:var(--surface2);font-weight:600">
@@ -2411,11 +2411,9 @@ function renderDollarView(threshold,dirFilter){
     <th ${tl('min-width:140px')}>GL Code</th>
     <th ${tl('min-width:130px;font-weight:400')}>Department</th>
     <th ${tl('min-width:100px;border-right:2px solid var(--border);font-weight:400')}>BU / Class</th>
-    ${actHide?`<th ${tr('border-left:2px solid var(--border);min-width:90px;cursor:pointer')} onclick="sortAttn('actAvg')">▶ Actuals <span id="si-actAvg">${sortIcon('actAvg')}</span></th>`:`${actMonthThs}<th ${tr('border-left:1px solid var(--border);min-width:90px;cursor:pointer;font-weight:700')} onclick="sortAttn('actAvg')">Avg/Mo Act <span id="si-actAvg">${sortIcon('actAvg')}</span></th>`}
-    ${fcstHide?`<th ${tr('border-left:2px solid #bfdbfe;min-width:90px;cursor:pointer;color:var(--blue)')} onclick="sortAttn('fcstAvg')">▶ Forecast <span id="si-fcstAvg">${sortIcon('fcstAvg')}</span></th>`:`${fcstMonthThs}<th ${tr('border-left:1px solid var(--border);min-width:90px;cursor:pointer;font-weight:700;color:var(--blue)')} onclick="sortAttn('fcstAvg')">Avg/Mo Fcst <span id="si-fcstAvg">${sortIcon('fcstAvg')}</span></th>`}
-    <th ${tr('border-left:2px solid var(--accent);min-width:90px;cursor:pointer')} onclick="sortAttn('actTotal')">Total Act 12M <span id="si-actTotal">${sortIcon('actTotal')}</span></th>
-    <th ${tr('min-width:90px;cursor:pointer;color:var(--blue)')} onclick="sortAttn('fcstTotal')">Total Fcst 12M <span id="si-fcstTotal">${sortIcon('fcstTotal')}</span></th>
-    <th ${tr('min-width:85px;cursor:pointer')} onclick="sortAttn('variance')">Variance $ <span id="si-variance">${sortIcon('variance')}</span></th>
+    ${actMonthThs}<th ${tr((actHide?'border-left:2px solid var(--border);':'border-left:1px solid var(--border);')+'min-width:96px;cursor:pointer;font-weight:700')} onclick="sortAttn('actTotal')">${actHide?'▶ ':''}Total Act 12M <span id="si-actTotal">${sortIcon('actTotal')}</span></th><th ${tr('min-width:90px;cursor:pointer;font-weight:700')} onclick="sortAttn('actAvg')">Avg/Mo Act <span id="si-actAvg">${sortIcon('actAvg')}</span></th>
+    ${fcstMonthThs}<th ${tr((fcstHide?'border-left:2px solid #bfdbfe;':'border-left:1px solid var(--border);')+'min-width:96px;cursor:pointer;font-weight:700;color:var(--blue)')} onclick="sortAttn('fcstTotal')">${fcstHide?'▶ ':''}Total Fcst 12M <span id="si-fcstTotal">${sortIcon('fcstTotal')}</span></th><th ${tr('min-width:90px;cursor:pointer;font-weight:700;color:var(--blue)')} onclick="sortAttn('fcstAvg')">Avg/Mo Fcst <span id="si-fcstAvg">${sortIcon('fcstAvg')}</span></th>
+    <th ${tr('border-left:2px solid var(--accent);min-width:85px;cursor:pointer')} onclick="sortAttn('variance')">Variance $ <span id="si-variance">${sortIcon('variance')}</span></th>
     <th ${tr('min-width:70px;cursor:pointer')} onclick="sortAttn('varPct')">Variance % <span id="si-varPct">${sortIcon('varPct')}</span></th>
     <th ${tr('min-width:90px')}>Direction</th>
     <th ${tl('min-width:180px')}>Explanation</th>
@@ -2437,8 +2435,8 @@ function renderDollarView(threshold,dirFilter){
     const p='padding:5px 8px';
     const actCollapsed=ATTN_COLS_ACT?'':' collapsed';
     const fcstCollapsed=ATTN_COLS_FCST?'':' collapsed';
-    const actCells=d.actAmts.map((v,i)=>`<td class="td-r attn-act-col${actCollapsed}" style="${p};font-size:10px;color:var(--text3)${v?';cursor:pointer;text-decoration:underline dotted':''}${i===0?';border-left:2px solid var(--border)':''}" ${v?`data-drill="act" data-idx="${idx}" data-pi="${i}" title="${d.last12AP[i]}"`:''}>${v?fmt(v):'—'}</td>`).join('');
-    const fcstCells=d.fcstAmts.map((v,i)=>`<td class="td-r attn-fcst-col${fcstCollapsed}" style="${p};font-size:10px;color:var(--blue)${v?';cursor:pointer;text-decoration:underline dotted':''}${i===0?';border-left:2px solid #bfdbfe':''}" ${v?`data-drill="fcst" data-idx="${idx}" data-pi="${i}" title="${d.futureFCPeriods[i]}"`:''}>${v?fmt(v):'—'}</td>`).join('');
+    const actCells=ATTN_COLS_ACT?d.actAmts.map((v,i)=>`<td class="td-r attn-act-col${actCollapsed}" style="${p};font-size:10px;color:var(--text3)${v?';cursor:pointer;text-decoration:underline dotted':''}${i===0?';border-left:2px solid var(--border)':''}" ${v?`data-drill="act" data-idx="${idx}" data-pi="${i}" title="${d.last12AP[i]}"`:''}>${v?fmt(v):'—'}</td>`).join(''):'';
+    const fcstCells=ATTN_COLS_FCST?d.fcstAmts.map((v,i)=>`<td class="td-r attn-fcst-col${fcstCollapsed}" style="${p};font-size:10px;color:var(--blue)${v?';cursor:pointer;text-decoration:underline dotted':''}${i===0?';border-left:2px solid #bfdbfe':''}" ${v?`data-drill="fcst" data-idx="${idx}" data-pi="${i}" title="${d.futureFCPeriods[i]}"`:''}>${v?fmt(v):'—'}</td>`).join(''):'';
     const actTotal=d.actAmts.reduce((s,v)=>s+v,0);
     const fcstTotal=d.fcstAmts.reduce((s,v)=>s+v,0);
     const totalVar=fcstTotal-actTotal;
@@ -2450,12 +2448,12 @@ function renderDollarView(threshold,dirFilter){
       <td style="${p};font-size:10px;color:var(--text3);max-width:130px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.dept)}">${esc(d.dept)}</td>
       <td style="${p};font-size:10px;color:var(--text3);border-right:2px solid var(--border);max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${esc(d.bu)}">${esc(d.bu)}</td>
       ${actCells}
-      <td class="td-r" style="${p};font-weight:700;font-size:11px;cursor:pointer;text-decoration:underline dotted;border-left:1px solid var(--border)" data-drill="act-all" data-idx="${idx}" title="Click to see all 12 months">${fmtF(d.actAvg)}</td>
+      <td class="td-r" style="${p};font-weight:700;font-size:11px;cursor:pointer;text-decoration:underline dotted;border-left:1px solid var(--border)" data-drill="act-all" data-idx="${idx}" title="Click to see all 12 months">${fmtF(actTotal)}</td>
+      <td class="td-r" style="${p};font-weight:700;font-size:11px">${fmtF(d.actAvg)}</td>
       ${fcstCells}
-      <td class="td-r" style="${p};font-weight:700;color:var(--blue);font-size:11px;cursor:pointer;text-decoration:underline dotted;border-left:1px solid var(--border)" data-drill="fcst-all" data-idx="${idx}" title="Click to see all forecast rows">${fmtF(d.fcstAvg)}</td>
-      <td class="td-r" style="${p};font-weight:700;font-size:11px;border-left:2px solid var(--accent)">${fmtF(actTotal)}</td>
-      <td class="td-r" style="${p};font-weight:700;color:var(--blue);font-size:11px">${fmtF(fcstTotal)}</td>
-      <td class="td-r ${totalVarClass}" style="${p};font-weight:700;font-size:11px">${fmtF(totalVar)}</td>
+      <td class="td-r" style="${p};font-weight:700;color:var(--blue);font-size:11px;cursor:pointer;text-decoration:underline dotted;border-left:1px solid var(--border)" data-drill="fcst-all" data-idx="${idx}" title="Click to see all forecast rows">${fmtF(fcstTotal)}</td>
+      <td class="td-r" style="${p};font-weight:700;color:var(--blue);font-size:11px">${fmtF(d.fcstAvg)}</td>
+      <td class="td-r ${totalVarClass}" style="${p};font-weight:700;font-size:11px;border-left:2px solid var(--accent)">${fmtF(totalVar)}</td>
       <td class="td-r ${totalVarClass}" style="${p};font-weight:700;font-size:11px">${fmtP(totalVarPct)}</td>
       <td style="${p}">${dirBadge}</td>
       <td style="${p};font-size:10px;color:var(--text2);min-width:180px">${d.why}</td>
