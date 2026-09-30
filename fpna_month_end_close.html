@@ -136,6 +136,9 @@
   #attn-main-table td:first-child,#attn-main-table th:first-child{position:sticky;left:0;background:inherit;z-index:1;}
   /* Cap the height so the horizontal scrollbar sits at the bottom of the visible box.
      Without the cap it lands below every row, and with 800+ vendors it is unreachable. */
+  #attn-bar{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;}
+  #attn-bar-summary{font-size:11px;color:var(--text3);}
+  #attn-bar-summary b{color:var(--text2);font-weight:700;}
   #attn-scroll-wrap{width:100%;max-height:70vh;overflow:auto;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);scrollbar-width:auto;scrollbar-color:var(--border-strong) var(--surface2);}
   #attn-scroll-wrap::-webkit-scrollbar{height:14px;width:14px;}
   #attn-scroll-wrap::-webkit-scrollbar-track{background:var(--surface2);border-radius:7px;}
@@ -481,6 +484,7 @@
 
           <!-- DOLLAR VIEW -->
           <div id="attn-dollar-view">
+            <div id="attn-controls">
             <div class="stats s4 mb12">
               <div class="stat sv-purple"><div class="stat-label">Vendors Flagged</div><div class="stat-value" id="attn-total">—</div></div>
               <div class="stat sv-red"><div class="stat-label">Unfavourable</div><div class="stat-value" id="attn-drift">—</div><div class="stat-sub">Actuals trending above forecast</div></div>
@@ -504,7 +508,7 @@
               <div class="ms-wrap" id="ms-attn-dept"><button class="ms-btn" onclick="toggleMS('ms-attn-dept')">Department <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-attn-dept')">All</button><button onclick="clearMS('ms-attn-dept')">None</button></div></div></div>
               <div class="ms-wrap" id="ms-attn-gl"><button class="ms-btn" onclick="toggleMS('ms-attn-gl')">GL Code <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-attn-gl')">All</button><button onclick="clearMS('ms-attn-gl')">None</button></div></div></div>
               <div class="ms-wrap" id="ms-attn-bu"><button class="ms-btn" onclick="toggleMS('ms-attn-bu')">BU <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-attn-bu')">All</button><button onclick="clearMS('ms-attn-bu')">None</button></div></div></div>
-              <button class="btn btn-sm ml-auto" onclick="expAttn()">Export CSV</button>
+
             </div>
             <!-- Column toggle buttons -->
             <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -512,6 +516,12 @@
               <button class="btn btn-sm" id="btn-act-cols" onclick="toggleAttnCols('act')">▼ Actuals (12 mo)</button>
               <button class="btn btn-sm" id="btn-fcst-cols" onclick="toggleAttnCols('fcst')">▼ Forecast (12 mo)</button>
               <span style="font-size:11px;color:var(--text3);margin-left:4px">· drag a column edge to resize, double-click it to auto-fit</span>
+            </div>
+            </div><!-- /attn-controls -->
+            <div id="attn-bar">
+              <button class="btn btn-sm" onclick="toggleAttnControls()" id="attn-toggle-btn">Hide controls</button>
+              <span id="attn-bar-summary"></span>
+              <button class="btn btn-sm" style="margin-left:auto" onclick="expAttn()">Export CSV</button>
             </div>
             <div id="attn-scroll-wrap">
               <table id="attn-main-table" data-hbar="1" style="font-size:11px;border-collapse:collapse;white-space:nowrap;min-width:100%">
@@ -742,6 +752,7 @@ async function load(){
   const lsCom=lsLoad(LS_KEY+'_com');
   if(lsCom)COMMENTARY=lsCom;
   loadSOTView();
+  try{ATTN_CTRL_HIDDEN=!!localStorage.getItem(LS_KEY+'_attnhide');}catch(e){}
   buildVendorMatchTable();
   buildAttnData();
   refreshAll();
@@ -2039,6 +2050,34 @@ let FUT_ROWS=[], FUT_PERIODS=[], FV_ROWS=[], FV_PERIOD='';
 // Size the scroll box so its bottom edge — and so the horizontal scrollbar — lands
 // inside the viewport. Measured from the document top rather than the current scroll
 // position, so the result is the same however the page happens to be scrolled.
+// Collapse the stat tiles, filters and column toggles so the grid gets the screen.
+// Persisted on its own since this tab has no saved-view mechanism.
+let ATTN_CTRL_HIDDEN=false;
+function toggleAttnControls(v){
+  ATTN_CTRL_HIDDEN=v===undefined?!ATTN_CTRL_HIDDEN:!!v;
+  try{localStorage.setItem(LS_KEY+'_attnhide',ATTN_CTRL_HIDDEN?'1':'');}catch(e){}
+  applyAttnControls();fitAttnTable();
+}
+function applyAttnControls(){
+  const c=document.getElementById('attn-controls');if(!c)return;
+  c.style.display=ATTN_CTRL_HIDDEN?'none':'';
+  const btn=document.getElementById('attn-toggle-btn');
+  if(btn)btn.textContent=ATTN_CTRL_HIDDEN?'▾ Show controls':'▴ Hide controls';
+  const sum=document.getElementById('attn-bar-summary');
+  if(!sum)return;
+  if(!ATTN_CTRL_HIDDEN){sum.textContent='';return;}
+  const thr=selVal('attn-threshold')||'5';
+  const dir=selVal('attn-direction');
+  const nf=['ms-attn-vendor','ms-attn-dept','ms-attn-gl','ms-attn-bu']
+    .filter(k=>MS_STATE[k]&&MS_STATE[k].size).length;
+  sum.innerHTML=`<b>${esc(document.getElementById('attn-total').textContent)}</b> flagged`
+    +` &nbsp;<b>Threshold</b> ≥${esc(thr)}%`
+    +` &nbsp;<b>Direction</b> ${dir==='unfav'?'Unfavourable':dir==='fav'?'Favourable':'All'}`
+    +` &nbsp;<b>Variance</b> ${esc(document.getElementById('attn-var-total').textContent)}`
+    +` &nbsp;<b>Months</b> ${ATTN_COLS_ACT?'Act':'—'}/${ATTN_COLS_FCST?'Fcst':'—'}`
+    +(nf?` &nbsp;<span style="color:var(--accent)"><b>Filtered</b> ${nf} field${nf===1?'':'s'}</span>`:'');
+}
+
 function fitAttnTable(){
   const w=document.getElementById('attn-scroll-wrap');if(!w)return;
   // Bail while the tab is hidden: getBoundingClientRect reads 0 on a display:none
@@ -2053,6 +2092,7 @@ function fitAttnTable(){
     const h=rows[0].offsetHeight;
     rows[1].querySelectorAll('th').forEach(th=>{th.style.top=h+'px';});
   }
+  applyAttnControls();
   wireColResize(RESIZE_ATTN);
   applyColWidths(RESIZE_ATTN);
   setupAttnHBar();
