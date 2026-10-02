@@ -791,31 +791,45 @@ function parseCSVLine(l){const r=[];let c='',q=false;for(let i=0;i<l.length;i++)
 const findC=(h,...t)=>{const lh=h.map(x=>x.toLowerCase().trim());for(const tt of t){const i=lh.findIndex(x=>x.includes(tt.toLowerCase()));if(i>=0)return h[i];}return null;};
 // ── MULTI-SELECT ENGINE ───────────────────────────────
 const MS_STATE={}; // {wrapperId: Set of selected values}
+const MS_CB={};    // {wrapperId: callback} — kept here so the delegated listener
+                   // can pick up a new callback without being re-bound
+
+// Distinct, sorted values for a field. Rebuilt only when the data changes — these
+// were being recomputed over all 40k AP rows for every widget on every render.
+let OPT_CACHE=new Map(),OPT_STAMP=-1;
+function dimVals(arr,field,tag){
+  if(OPT_STAMP!==DATA_STAMP){OPT_CACHE=new Map();OPT_STAMP=DATA_STAMP;}
+  const k=tag+'|'+field;
+  let v=OPT_CACHE.get(k);
+  if(!v){v=[...new Set(arr.map(r=>r[field]))].filter(Boolean).sort();OPT_CACHE.set(k,v);}
+  return v;
+}
 
 function initMS(id, opts, onchange){
   const wrap=document.getElementById(id);if(!wrap)return;
   if(!MS_STATE[id])MS_STATE[id]=new Set();
   const allOpts=[...new Set(opts)].filter(Boolean).sort();
   const list=wrap.querySelector('.ms-list');
-  // Only rebuild HTML if options have actually changed — prevents scroll-to-top on checkbox click
-  const existingOpts=[...list.querySelectorAll('input[type=checkbox]')].map(cb=>cb.value);
-  const optsChanged=allOpts.length!==existingOpts.length||allOpts.some((o,i)=>o!==existingOpts[i]);
+  // Compare against the options we last rendered rather than re-reading the DOM —
+  // with 1,300 vendors across several widgets that scan ran on every render.
+  const prev=list._opts;
+  const optsChanged=!prev||prev.length!==allOpts.length||allOpts.some((o,i)=>o!==prev[i]);
   if(optsChanged){
     list.innerHTML=allOpts.map(o=>`<label class="ms-item"><input type="checkbox" value="${esc(o)}"${MS_STATE[id].has(o)?' checked':''}><span>${esc(o)}</span></label>`).join('');
-    list.querySelectorAll('input[type=checkbox]').forEach(cb=>{
-      cb.addEventListener('change',()=>{
-        if(cb.checked)MS_STATE[id].add(cb.value);else MS_STATE[id].delete(cb.value);
-        updateMSBtn(id);onchange();
-      });
-    });
-  } else {
-    // Re-attach handlers in case they were lost (e.g. after page navigation)
-    list.querySelectorAll('input[type=checkbox]').forEach(cb=>{
-      cb.onchange=null;
-      cb.addEventListener('change',()=>{
-        if(cb.checked)MS_STATE[id].add(cb.value);else MS_STATE[id].delete(cb.value);
-        updateMSBtn(id);onchange();
-      });
+    list._opts=allOpts;
+  }
+  // ONE delegated listener per list, bound once. Previously every render attached a
+  // fresh change handler to every checkbox — cb.onchange=null does not remove an
+  // addEventListener registration — so handlers stacked up and a single click
+  // re-rendered 2, 4, 8, 16… times until the tab locked up.
+  MS_CB[id]=onchange;
+  if(!list._wired){
+    list._wired=1;
+    list.addEventListener('change',e=>{
+      const cb=e.target.closest('input[type=checkbox]');if(!cb)return;
+      if(cb.checked)MS_STATE[id].add(cb.value);else MS_STATE[id].delete(cb.value);
+      updateMSBtn(id);
+      const fn=MS_CB[id];if(fn)fn();
     });
   }
   updateMSBtn(id);
@@ -1024,7 +1038,9 @@ function handleFcst(event){
 }
 
 // ── REFRESH ALL ───────────────────────────────────────
+let DATA_STAMP=0;
 function refreshAll(){
+  DATA_STAMP++;  // invalidates the option-list and accrual-suggestion caches
   updateUploadPage();
   renderActuals();
   renderFcstVsAct();
@@ -1071,13 +1087,13 @@ function renderActuals(){
   if(!has)return;
   const periods=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
   initMS('ms-af-period',periods,renderActuals);
-  initMS('ms-af-sub',[...new Set(AP.map(r=>r.sub))],renderActuals);
-  initMS('ms-af-dept',[...new Set(AP.map(r=>r.dept))],renderActuals);
-  initMS('ms-af-vendor',[...new Set(AP.map(r=>r.vendor))],renderActuals);
-  initMS('ms-af-gl',[...new Set(AP.map(r=>r.account))],renderActuals);
-  initMS('ms-af-class',[...new Set(AP.map(r=>r.cls))],renderActuals);
-  initMS('ms-af-cc',[...new Set(AP.map(r=>r.cc))],renderActuals);
-  initMS('ms-af-type',[...new Set(AP.map(r=>r.type))],renderActuals);
+  initMS('ms-af-sub',dimVals(AP,'sub','ap'),renderActuals);
+  initMS('ms-af-dept',dimVals(AP,'dept','ap'),renderActuals);
+  initMS('ms-af-vendor',dimVals(AP,'vendor','ap'),renderActuals);
+  initMS('ms-af-gl',dimVals(AP,'account','ap'),renderActuals);
+  initMS('ms-af-class',dimVals(AP,'cls','ap'),renderActuals);
+  initMS('ms-af-cc',dimVals(AP,'cc','ap'),renderActuals);
+  initMS('ms-af-type',dimVals(AP,'type','ap'),renderActuals);
   const d=getAPF();const tot=d.reduce((s,r)=>s+r.amount,0);
   document.getElementById('a-total').textContent=fmt(tot);
   document.getElementById('a-txns').textContent=d.length.toLocaleString();
@@ -1118,7 +1134,7 @@ function buildSOTFilters(){
         +`<div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('${id}')">All</button><button onclick="clearMS('${id}')">None</button></div></div></div>`;
     }).join('');
   }
-  SOT_DIMS.forEach(([f])=>initMS('ms-sot-'+f,[...new Set(AP.map(r=>r[f]))].filter(Boolean),renderSOT));
+  SOT_DIMS.forEach(([f])=>initMS('ms-sot-'+f,dimVals(AP,f,'ap'),renderSOT));
 }
 
 // Dimensions available to the pivot. Default view answers the common question:
@@ -1832,7 +1848,15 @@ function renderFuture(){
 }
 
 // ── ACCRUALS ──────────────────────────────────────────
+let ACC_CACHE=new Map(),ACC_STAMP=-1;
 function getAccSuggestions(targetP){
+  if(ACC_STAMP!==DATA_STAMP){ACC_CACHE=new Map();ACC_STAMP=DATA_STAMP;}
+  if(ACC_CACHE.has(targetP))return ACC_CACHE.get(targetP);
+  const out=computeAccSuggestions(targetP);
+  ACC_CACHE.set(targetP,out);
+  return out;
+}
+function computeAccSuggestions(targetP){
   const allP=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
   const idx=allP.indexOf(targetP);if(idx<2)return[];
   const priorP=allP[idx-1];const lb=allP.slice(Math.max(0,idx-6),idx);
@@ -1939,7 +1963,9 @@ function getAccSuggestions(targetP){
   return suggestions.sort((a,b)=>b.suggested_amount-a.suggested_amount);
 }
 
-function renderAccruals(){
+let _accDebounce;
+function renderAccruals(){clearTimeout(_accDebounce);_accDebounce=setTimeout(_renderAccrualsNow,90);}
+function _renderAccrualsNow(){
   const scrollY=window.scrollY||document.documentElement.scrollTop;
   const has=AP.length>0;document.getElementById('acc-empty').style.display=has?'none':'block';document.getElementById('acc-content').style.display=has?'block':'none';if(!has)return;
   const allP=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
@@ -1948,10 +1974,10 @@ function renderAccruals(){
   if(!sel.value&&curP)sel.value=curP;
   // Options span AP and Adaptive: forecast-only lines have no AP row, so filtering on
   // AP values alone would hide the very rows that need attention.
-  initMS('ms-acc-vendor',[...new Set([...AP.map(r=>r.vendor),...FC.map(r=>r.vendor_name)])].filter(Boolean),renderAccruals);
-  initMS('ms-acc-dept',[...new Set([...AP.map(r=>r.dept),...FC.map(r=>r.cc||r.cc_code)])].filter(Boolean),renderAccruals);
-  initMS('ms-acc-gl',[...new Set([...AP.map(r=>r.account),...FC.map(r=>r.gl_code)])].filter(Boolean),renderAccruals);
-  initMS('ms-acc-cc',[...new Set([...AP.map(r=>r.cc),...FC.map(r=>r.cc_code)])].filter(Boolean),renderAccruals);
+  initMS('ms-acc-vendor',dimVals(AP,'vendor','ap').concat(dimVals(FC,'vendor_name','fc')),renderAccruals);
+  initMS('ms-acc-dept',dimVals(AP,'dept','ap').concat(dimVals(FC,'cc','fc'),dimVals(FC,'cc_code','fc')),renderAccruals);
+  initMS('ms-acc-gl',dimVals(AP,'account','ap').concat(dimVals(FC,'gl_code','fc')),renderAccruals);
+  initMS('ms-acc-cc',dimVals(AP,'cc','ap').concat(dimVals(FC,'cc_code','fc')),renderAccruals);
   const period=sel.value||curP;
   let sugg=getAccSuggestions(period);
   const cF=selVal('acc-conf');if(cF)sugg=sugg.filter(s=>s.confidence===cF);
@@ -2309,11 +2335,11 @@ function _renderAttentionNow(){
   if(!has)return;
 
   // Populate filters from AP/FC (full vendor list for searching)
-  initMS('ms-attn-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean).sort(),_renderAttentionNow);
-  initMS('ms-attn-dept',[...new Set(AP.map(r=>r.dept))].filter(Boolean).sort(),_renderAttentionNow);
-  initMS('ms-attn-gl',[...new Set(AP.map(r=>r.account))].filter(Boolean).sort(),_renderAttentionNow);
-  initMS('ms-attn-bu',[...new Set(FC.map(r=>r.bu))].filter(Boolean).sort(),_renderAttentionNow);
-  initMS('ms-coding-vendor',[...new Set(AP.map(r=>r.vendor))].filter(Boolean).sort(),renderCodingIssues);
+  initMS('ms-attn-vendor',dimVals(AP,'vendor','ap'),_renderAttentionNow);
+  initMS('ms-attn-dept',dimVals(AP,'dept','ap'),_renderAttentionNow);
+  initMS('ms-attn-gl',dimVals(AP,'account','ap'),_renderAttentionNow);
+  initMS('ms-attn-bu',dimVals(FC,'bu','fc'),_renderAttentionNow);
+  initMS('ms-coding-vendor',dimVals(AP,'vendor','ap'),renderCodingIssues);
 
   const threshold=parseInt(document.getElementById('attn-threshold')?.value||'5');
   const dirFilter=document.getElementById('attn-direction')?.value||'';
