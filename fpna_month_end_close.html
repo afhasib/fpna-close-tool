@@ -455,6 +455,7 @@
             <div class="ms-wrap" id="ms-acc-dept"><button class="ms-btn" onclick="toggleMS('ms-acc-dept')">Department <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-acc-dept')">All</button><button onclick="clearMS('ms-acc-dept')">None</button></div></div></div>
             <div class="ms-wrap" id="ms-acc-gl"><button class="ms-btn" onclick="toggleMS('ms-acc-gl')">GL Code <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-acc-gl')">All</button><button onclick="clearMS('ms-acc-gl')">None</button></div></div></div>
             <div class="ms-wrap" id="ms-acc-cc"><button class="ms-btn" onclick="toggleMS('ms-acc-cc')">Cost Center <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-acc-cc')">All</button><button onclick="clearMS('ms-acc-cc')">None</button></div></div></div>
+            <div class="ms-wrap" id="ms-acc-bu"><button class="ms-btn" onclick="toggleMS('ms-acc-bu')">BU / Class <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-acc-bu')">All</button><button onclick="clearMS('ms-acc-bu')">None</button></div></div></div>
           </div>
           <div class="stats s5 mb12" id="acc-stats" style="display:none">
             <div class="stat sv-accent"><div class="stat-label">Suggested Accruals</div><div class="stat-value" id="acc-cnt">—</div></div>
@@ -573,7 +574,7 @@
           <div class="filter-bar"><button class="btn btn-primary btn-sm ml-auto" onclick="expApproved()">Export JE CSV</button></div>
           <div class="table-wrap">
             <table><thead><tr>
-              <th>Vendor</th><th>GL Code</th><th>GL Name</th><th>Department</th><th>Period</th>
+              <th>Vendor</th><th>GL Code</th><th>GL Name</th><th>Department</th><th>BU / Class</th><th>Period</th>
               <th class="td-r">Curr Month</th><th class="td-r">Prior Month</th><th class="td-r">6-Mo Avg</th>
               <th class="td-r">Forecast</th><th class="td-r" style="color:var(--green)">Accrual $</th>
               <th>Risk</th><th></th>
@@ -1866,7 +1867,8 @@ function computeAccSuggestions(targetP){
 
   AP.filter(r=>lb.includes(r.period)).forEach(r=>{
     const k=normVendor(r.vendor)+'|||'+r.account+'|||'+r.dept;
-    if(!combos[k])combos[k]={vendor:r.vendor,account:r.account,dept:r.dept,cc:r.cc,amts:{},priorAmt:0,vendorNames:new Set()};
+    if(!combos[k])combos[k]={vendor:r.vendor,account:r.account,dept:r.dept,cc:r.cc,amts:{},priorAmt:0,vendorNames:new Set(),clsSet:new Set()};
+    if(r.cls)combos[k].clsSet.add(r.cls);
     combos[k].amts[r.period]=(combos[k].amts[r.period]||0)+r.amount;
     combos[k].vendorNames.add(r.vendor);
   });
@@ -1877,6 +1879,7 @@ function computeAccSuggestions(targetP){
   const currActuals={};AP.filter(r=>r.period===targetP).forEach(r=>{
     const k=normVendor(r.vendor)+'|||'+r.account+'|||'+r.dept;
     currActuals[k]=(currActuals[k]||0)+r.amount;
+    if(r.cls&&combos[k])combos[k].clsSet.add(r.cls);
     // Track current period vendor name separately
     if(!currActuals[k+'__name'])currActuals[k+'__name']=r.vendor;
   });
@@ -1917,7 +1920,7 @@ function computeAccSuggestions(targetP){
     const vendorNameMismatch=!!vendorMatch.vendor&&!apRawNames.has(rawNm(vendorMatch.vendor));
     let confidence='low';
     if(fcstRisk==='aligned')confidence='low';else if(freq>=0.83&&Math.abs(avg)>1000)confidence='high';else if(freq>=0.5)confidence='medium';
-    suggestions.push({key,vendor:combo.vendor,currVendorName:currName,nameChanged,histNames,account:combo.account,dept:combo.dept,cc:combo.cc,suggested_amount:suggestedAccrual,curr_month:currAmt,prior_month:priorAmt,six_mo_avg:Math.round(avg),frequency:freq,periods_seen:n,lookback_count:lb.length,confidence,fcst_risk:fcstRisk,fcst_amount:fcstAmt,fcst_vendor:fcstVendorName,fcst_match_score:fcstMatchScore,fcst_dept:vendorMatch.fcst_dept||null,fcst_dept_score:fcstDeptScore,gl_mismatch:glMismatch,dept_mismatch:deptMismatch,no_dept_match:vendorMatch.no_dept_match||false,ap_gl:apGL,fcst_gl:fcstGL,fcst_gl_name:fcstGLName,
+    suggestions.push({key,vendor:combo.vendor,currVendorName:currName,nameChanged,histNames,account:combo.account,dept:combo.dept,cc:combo.cc,bu:[...combo.clsSet].sort().join(' / '),bu_set:[...combo.clsSet],suggested_amount:suggestedAccrual,curr_month:currAmt,prior_month:priorAmt,six_mo_avg:Math.round(avg),frequency:freq,periods_seen:n,lookback_count:lb.length,confidence,fcst_risk:fcstRisk,fcst_amount:fcstAmt,fcst_vendor:fcstVendorName,fcst_match_score:fcstMatchScore,fcst_dept:vendorMatch.fcst_dept||null,fcst_dept_score:fcstDeptScore,gl_mismatch:glMismatch,dept_mismatch:deptMismatch,no_dept_match:vendorMatch.no_dept_match||false,ap_gl:apGL,fcst_gl:fcstGL,fcst_gl_name:fcstGLName,
       accrual_basis:accrualBasis,hist_gap:Math.round(histGap),fcst_missing:fcstMissing,fcst_missing_reason:fcstMissingReason,vendor_name_mismatch:vendorNameMismatch,ap_vendor_names:[...apRawNames].join(' / '),fc_key:vendorMatch.fc_key||null,no_ap_history:false});
   });
   // FORECAST-ONLY LINES. Everything above is nominated by AP history, so a vendor
@@ -1947,6 +1950,8 @@ function computeAccSuggestions(targetP){
       key:normVendor(f.vendor_name)+'|||'+f.gl_code+'|||'+dept,
       vendor:f.vendor_name,currVendorName:f.vendor_name,nameChanged:false,histNames:apNames.join(' / '),
       account:f.gl_code,dept,cc:f.cc_code||'',
+      bu:[...new Set(histRows.concat(currRows.filter(apMatch)).map(r=>r.cls).filter(Boolean))].sort().join(' / ')||f.bu||'',
+      bu_set:[...new Set(histRows.concat(currRows.filter(apMatch)).map(r=>r.cls).filter(Boolean))].concat(f.bu?[f.bu]:[]),
       suggested_amount:accrual,curr_month:currAmt,prior_month:0,
       six_mo_avg:histMonths?Math.round(histTot/histMonths):0,
       frequency:histMonths/Math.max(lb.length,1),periods_seen:histMonths,lookback_count:lb.length,
@@ -1978,10 +1983,13 @@ function _renderAccrualsNow(){
   initMS('ms-acc-dept',dimVals(AP,'dept','ap').concat(dimVals(FC,'cc','fc'),dimVals(FC,'cc_code','fc')),renderAccruals);
   initMS('ms-acc-gl',dimVals(AP,'account','ap').concat(dimVals(FC,'gl_code','fc')),renderAccruals);
   initMS('ms-acc-cc',dimVals(AP,'cc','ap').concat(dimVals(FC,'cc_code','fc')),renderAccruals);
+  initMS('ms-acc-bu',dimVals(AP,'cls','ap').concat(dimVals(FC,'bu','fc')),renderAccruals);
   const period=sel.value||curP;
   let sugg=getAccSuggestions(period);
   const cF=selVal('acc-conf');if(cF)sugg=sugg.filter(s=>s.confidence===cF);
   sugg=msFilter(sugg,'ms-acc-vendor','vendor');sugg=msFilter(sugg,'ms-acc-dept','dept');sugg=msFilter(sugg,'ms-acc-gl','account');sugg=msFilter(sugg,'ms-acc-cc','cc');
+  const buSel=getMS('ms-acc-bu');  // multi-valued: a combo can span more than one class
+  if(buSel)sugg=sugg.filter(s=>(s.bu_set||[]).some(bval=>buSel.includes(bval)));
   const approved=sugg.filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});
   const totS=sugg.reduce((s,r)=>s+r.suggested_amount,0);
   document.getElementById('acc-stats').style.display=sugg.length?'grid':'none';
@@ -2004,7 +2012,7 @@ function _renderAccrualsNow(){
       <div class="acc-vendor">${esc(s.vendor)} <span class="tag tag-gl">${esc(s.account)}</span>${s.nameChanged?`<span class="badge" style="background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border);margin-left:6px">⚠ Name Changed</span>`:''}
       </div>
       ${s.nameChanged?`<div style="font-size:11px;color:var(--yellow);margin-bottom:4px;font-weight:500">⚠ Vendor name changed: historical name "<strong>${esc(s.histNames)}</strong>" → current period name "<strong>${esc(s.currVendorName)}</strong>". Same vendor — actuals combined. Verify in NetSuite.</div>`:''}
-      <div class="acc-meta"><span class="badge ${bc}">${s.confidence} risk</span>${fb}${s.gl_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL Mismatch — Review Coding</span>`:s.dept_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept Mismatch — Review Coding</span>`:''}${s.fcst_missing?`<span class="badge" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-border)">📋 Not in Adaptive — Add Forecast</span>`:''}${s.no_ap_history?`<span class="badge" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)">⚠ Forecast Only — ${s.no_ap_history_reason==='no-ap-actuals'?'No AP Actuals':'Immaterial AP History'}</span>`:''}${s.vendor_name_mismatch?`<span class="badge" style="background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border)">⚠ Vendor Name Not Exact</span>`:''}<span>Dept: ${esc(s.dept)||'—'}</span><span>${s.periods_seen}/${s.lookback_count} months (${Math.round(s.frequency*100)}%)</span>${s.cc?`<span>CC: ${esc(s.cc)}</span>`:''}</div>
+      <div class="acc-meta"><span class="badge ${bc}">${s.confidence} risk</span>${fb}${s.gl_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL Mismatch — Review Coding</span>`:s.dept_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept Mismatch — Review Coding</span>`:''}${s.fcst_missing?`<span class="badge" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-border)">📋 Not in Adaptive — Add Forecast</span>`:''}${s.no_ap_history?`<span class="badge" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)">⚠ Forecast Only — ${s.no_ap_history_reason==='no-ap-actuals'?'No AP Actuals':'Immaterial AP History'}</span>`:''}${s.vendor_name_mismatch?`<span class="badge" style="background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border)">⚠ Vendor Name Not Exact</span>`:''}<span>Dept: ${esc(s.dept)||'—'}</span>${s.bu?`<span>BU: ${esc(s.bu)}</span>`:''}<span>${s.periods_seen}/${s.lookback_count} months (${Math.round(s.frequency*100)}%)</span>${s.cc?`<span>CC: ${esc(s.cc)}</span>`:''}</div>
       <div class="acc-amounts" style="grid-template-columns:repeat(5,1fr)">
         <div class="acc-amt-cell"><div class="acc-amt-label">Current Month</div><div class="acc-amt-val ${s.curr_month>0&&s.curr_month<s.six_mo_avg*0.5?'highlight':''}">${fmtF(s.curr_month)}</div></div>
         <div class="acc-amt-cell"><div class="acc-amt-label">Prior Month</div><div class="acc-amt-val">${fmtF(s.prior_month)}</div></div>
@@ -2625,7 +2633,7 @@ function renderApproved(){
       src=suggCache[period].find(s=>s.key===key)||null;
     }
     approved.push({period,
-      vendor:src?.vendor||normVendor,account:src?.account||account,dept:src?.dept||dept,cc:src?.cc||'',
+      vendor:src?.vendor||normVendor,account:src?.account||account,dept:src?.dept||dept,cc:src?.cc||'',bu:src?.bu||'',
       curr:src?.curr_month||0,prior:src?.prior_month||0,avg:src?.six_mo_avg||0,
       sugg:src?.suggested_amount||0,fcst:src?.fcst_amount??null,
       conf:src?.confidence||'low',risk:src?.fcst_risk||'unknown',
@@ -2646,6 +2654,7 @@ function renderApproved(){
     <td><span class="tag tag-gl" style="font-size:10px">${esc(e.account)}</span></td>
     <td class="td-m">${esc(glName(e.account))}</td>
     <td class="td-m">${esc(e.dept)}</td>
+    <td class="td-m">${esc(e.bu)}</td>
     <td class="td-m">${esc(e.period)}</td>
     <td class="td-r">${fmtF(e.curr)}</td>
     <td class="td-r">${fmtF(e.prior)}</td>
@@ -2673,9 +2682,9 @@ function dlCSV(rows,name){
 }
 
 function expApproved(){
-  const rows=[['Period','Vendor','GL Code','GL Name','Department','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Accrual $','Confidence','Fcst Risk']];
+  const rows=[['Period','Vendor','GL Code','GL Name','Department','BU / Class','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Accrual $','Confidence','Fcst Risk']];
   rows[0].push('Accrual Basis','Adaptive Fcst Vendor','Not In Adaptive','Vendor Name Not Exact','Forecast Only - No AP Actuals');
-  APPROVED_ROWS.forEach(e=>rows.push([e.period,e.vendor,e.account,(e.account||'').split(':').slice(1).join(':').trim(),e.dept,e.cc,e.curr,e.prior,e.avg,e.fcst!=null?e.fcst:'N/A',e.sugg,e.conf,e.risk,
+  APPROVED_ROWS.forEach(e=>rows.push([e.period,e.vendor,e.account,(e.account||'').split(':').slice(1).join(':').trim(),e.dept,e.bu,e.cc,e.curr,e.prior,e.avg,e.fcst!=null?e.fcst:'N/A',e.sugg,e.conf,e.risk,
     e.basis==='forecast'?'Forecast − Actuals':'Hist Avg − Actuals',e.fcstVendor||'',e.fcstMissing?'YES':'',e.nameMismatch?'YES':'',e.noApHistory?'YES':'']));
   dlCSV(rows,'approved_accruals_'+new Date().toISOString().slice(0,10)+'.csv');
 }
@@ -2725,7 +2734,7 @@ function expCoding(){
   dlCSV(rows,'coding_issues_'+new Date().toISOString().slice(0,10)+'.csv');
 }
 
-function expAccruals(){const period=selVal('acc-period');const approved=getAccSuggestions(period).filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});dlCSV([['Period','Vendor','GL Code','Dept','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Forecast Remaining','Suggested Accrual','Confidence','Fcst Risk','Accrual Basis','Adaptive Fcst Vendor','Not In Adaptive','Vendor Name Not Exact','Forecast Only - No AP Actuals']].concat(approved.map(s=>[period,s.vendor,s.account,s.dept,s.cc,s.curr_month,s.prior_month,s.six_mo_avg,s.fcst_amount!==null?s.fcst_amount:'N/A',s.fcst_amount!==null?Math.max(0,s.fcst_amount-s.curr_month):'N/A',s.suggested_amount,s.confidence,s.fcst_risk,s.accrual_basis==='forecast'?'Forecast − Actuals':'Hist Avg − Actuals',s.fcst_vendor||'',s.fcst_missing?'YES':'',s.vendor_name_mismatch?'YES':'',s.no_ap_history?'YES':''])),'accruals_approved_'+period+'.csv');}
+function expAccruals(){const period=selVal('acc-period');const approved=getAccSuggestions(period).filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});dlCSV([['Period','Vendor','GL Code','Dept','Cost Center','Current Month Actual','Prior Month','6-Mo Avg','Current Forecast','Forecast Remaining','BU / Class','Suggested Accrual','Confidence','Fcst Risk','Accrual Basis','Adaptive Fcst Vendor','Not In Adaptive','Vendor Name Not Exact','Forecast Only - No AP Actuals']].concat(approved.map(s=>[period,s.vendor,s.account,s.dept,s.cc,s.curr_month,s.prior_month,s.six_mo_avg,s.fcst_amount!==null?s.fcst_amount:'N/A',s.fcst_amount!==null?Math.max(0,s.fcst_amount-s.curr_month):'N/A',s.bu,s.suggested_amount,s.confidence,s.fcst_risk,s.accrual_basis==='forecast'?'Forecast − Actuals':'Hist Avg − Actuals',s.fcst_vendor||'',s.fcst_missing?'YES':'',s.vendor_name_mismatch?'YES':'',s.no_ap_history?'YES':''])),'accruals_approved_'+period+'.csv');}
 
 // ── NAV ───────────────────────────────────────────────
 const PAGE_CFG={upload:{t:'Upload Data',s:'Load AP Details and Forecast exports from Adaptive / NetSuite'},actuals:{t:'AP Actuals',s:'12-month spend analysis — filter by any dimension'},fcst:{t:'Forecast vs Actuals',s:'Compare actuals against M8 forecast with GL-level variance commentary'},future:{t:'Future Forecast',s:'Upcoming months forecast — identify lines needing updates'},accruals:{t:'Accruals',s:'Month-end accrual recommendations with forecast risk scoring'},approved:{t:'Current Month Accruals',s:'Finalized approved accruals for the current close period — ready for JE posting'},attention:{t:'Needs Attention',s:'Items requiring action — forecast drift, accrual gaps, spend spikes'},sot:{t:'Source of Truth',s:'Complete 12-month AP actuals — single source of truth'}};
