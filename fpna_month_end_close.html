@@ -806,6 +806,24 @@ function dimVals(arr,field,tag){
   return v;
 }
 
+// AP codes a business unit as "50 - Skills"; Adaptive codes the same one as "50".
+// Collapse them onto the labelled form so each BU is offered once and a filter on
+// it matches rows coded either way.
+let BU_CANON=new Map(),BU_CANON_STAMP=-1;
+const buCode=v=>{const m=String(v||'').match(/^\s*(\d+)/);return m?m[1]:String(v||'').trim().toUpperCase();};
+function buCanon(){
+  if(BU_CANON_STAMP!==DATA_STAMP){
+    BU_CANON=new Map();BU_CANON_STAMP=DATA_STAMP;
+    [...dimVals(AP,'cls','ap'),...dimVals(FC,'bu','fc')].forEach(v=>{
+      const c=buCode(v),cur=BU_CANON.get(c);
+      if(!cur||String(v).length>String(cur).length)BU_CANON.set(c,v); // prefer the labelled form
+    });
+  }
+  return BU_CANON;
+}
+const buLabel=v=>v?(buCanon().get(buCode(v))||v):'';
+const buLabels=v=>[...new Set(String(v||'').split(' / ').filter(Boolean).map(buLabel))].join(' / ');
+
 function initMS(id, opts, onchange){
   const wrap=document.getElementById(id);if(!wrap)return;
   if(!MS_STATE[id])MS_STATE[id]=new Set();
@@ -1676,7 +1694,7 @@ function buildVendorMatchTable(){
     if(!r.vendor_name||!r.gl_code)return;
     const deptKey=(r.cc_code||r.cc||'').trim();
     const k=r.vendor_name+'||'+r.gl_code+'||'+deptKey;
-    if(!fcCombos[k])fcCombos[k]={fc_key:k,vendor_name:r.vendor_name,gl_code:r.gl_code,gl_name:r.gl_name||'',cc:r.cc,cc_code:r.cc_code,dept_key:deptKey,periods:{}};
+    if(!fcCombos[k])fcCombos[k]={fc_key:k,vendor_name:r.vendor_name,gl_code:r.gl_code,gl_name:r.gl_name||'',bu:r.bu||'',cc:r.cc,cc_code:r.cc_code,dept_key:deptKey,periods:{}};
     fcCombos[k].periods[r.period]=(fcCombos[k].periods[r.period]||0)+r.amount;
   });
   const fcList=Object.values(fcCombos);
@@ -1920,7 +1938,7 @@ function computeAccSuggestions(targetP){
     const vendorNameMismatch=!!vendorMatch.vendor&&!apRawNames.has(rawNm(vendorMatch.vendor));
     let confidence='low';
     if(fcstRisk==='aligned')confidence='low';else if(freq>=0.83&&Math.abs(avg)>1000)confidence='high';else if(freq>=0.5)confidence='medium';
-    suggestions.push({key,vendor:combo.vendor,currVendorName:currName,nameChanged,histNames,account:combo.account,dept:combo.dept,cc:combo.cc,bu:[...combo.clsSet].sort().join(' / '),bu_set:[...combo.clsSet],suggested_amount:suggestedAccrual,curr_month:currAmt,prior_month:priorAmt,six_mo_avg:Math.round(avg),frequency:freq,periods_seen:n,lookback_count:lb.length,confidence,fcst_risk:fcstRisk,fcst_amount:fcstAmt,fcst_vendor:fcstVendorName,fcst_match_score:fcstMatchScore,fcst_dept:vendorMatch.fcst_dept||null,fcst_dept_score:fcstDeptScore,gl_mismatch:glMismatch,dept_mismatch:deptMismatch,no_dept_match:vendorMatch.no_dept_match||false,ap_gl:apGL,fcst_gl:fcstGL,fcst_gl_name:fcstGLName,
+    suggestions.push({key,vendor:combo.vendor,currVendorName:currName,nameChanged,histNames,account:combo.account,dept:combo.dept,cc:combo.cc,bu:[...new Set([...combo.clsSet].map(buLabel))].sort().join(' / '),bu_set:[...combo.clsSet],suggested_amount:suggestedAccrual,curr_month:currAmt,prior_month:priorAmt,six_mo_avg:Math.round(avg),frequency:freq,periods_seen:n,lookback_count:lb.length,confidence,fcst_risk:fcstRisk,fcst_amount:fcstAmt,fcst_vendor:fcstVendorName,fcst_match_score:fcstMatchScore,fcst_dept:vendorMatch.fcst_dept||null,fcst_dept_score:fcstDeptScore,gl_mismatch:glMismatch,dept_mismatch:deptMismatch,no_dept_match:vendorMatch.no_dept_match||false,ap_gl:apGL,fcst_gl:fcstGL,fcst_gl_name:fcstGLName,
       accrual_basis:accrualBasis,hist_gap:Math.round(histGap),fcst_missing:fcstMissing,fcst_missing_reason:fcstMissingReason,vendor_name_mismatch:vendorNameMismatch,ap_vendor_names:[...apRawNames].join(' / '),fc_key:vendorMatch.fc_key||null,no_ap_history:false});
   });
   // FORECAST-ONLY LINES. Everything above is nominated by AP history, so a vendor
@@ -1950,7 +1968,7 @@ function computeAccSuggestions(targetP){
       key:normVendor(f.vendor_name)+'|||'+f.gl_code+'|||'+dept,
       vendor:f.vendor_name,currVendorName:f.vendor_name,nameChanged:false,histNames:apNames.join(' / '),
       account:f.gl_code,dept,cc:f.cc_code||'',
-      bu:[...new Set(histRows.concat(currRows.filter(apMatch)).map(r=>r.cls).filter(Boolean))].sort().join(' / ')||f.bu||'',
+      bu:[...new Set(histRows.concat(currRows.filter(apMatch)).map(r=>r.cls).filter(Boolean).map(buLabel))].sort().join(' / ')||buLabel(f.bu)||'',
       bu_set:[...new Set(histRows.concat(currRows.filter(apMatch)).map(r=>r.cls).filter(Boolean))].concat(f.bu?[f.bu]:[]),
       suggested_amount:accrual,curr_month:currAmt,prior_month:0,
       six_mo_avg:histMonths?Math.round(histTot/histMonths):0,
@@ -1983,13 +2001,13 @@ function _renderAccrualsNow(){
   initMS('ms-acc-dept',dimVals(AP,'dept','ap').concat(dimVals(FC,'cc','fc'),dimVals(FC,'cc_code','fc')),renderAccruals);
   initMS('ms-acc-gl',dimVals(AP,'account','ap').concat(dimVals(FC,'gl_code','fc')),renderAccruals);
   initMS('ms-acc-cc',dimVals(AP,'cc','ap').concat(dimVals(FC,'cc_code','fc')),renderAccruals);
-  initMS('ms-acc-bu',dimVals(AP,'cls','ap').concat(dimVals(FC,'bu','fc')),renderAccruals);
+  initMS('ms-acc-bu',[...new Set(dimVals(AP,'cls','ap').concat(dimVals(FC,'bu','fc')).map(buLabel))],renderAccruals);
   const period=sel.value||curP;
   let sugg=getAccSuggestions(period);
   const cF=selVal('acc-conf');if(cF)sugg=sugg.filter(s=>s.confidence===cF);
   sugg=msFilter(sugg,'ms-acc-vendor','vendor');sugg=msFilter(sugg,'ms-acc-dept','dept');sugg=msFilter(sugg,'ms-acc-gl','account');sugg=msFilter(sugg,'ms-acc-cc','cc');
   const buSel=getMS('ms-acc-bu');  // multi-valued: a combo can span more than one class
-  if(buSel)sugg=sugg.filter(s=>(s.bu_set||[]).some(bval=>buSel.includes(bval)));
+  if(buSel)sugg=sugg.filter(s=>(s.bu_set||[]).some(bval=>buSel.includes(buLabel(bval))));
   const approved=sugg.filter(s=>{const v=ACC_DEC[period+'|||'+s.key];return v==='approved'||v?.status==='approved';});
   const totS=sugg.reduce((s,r)=>s+r.suggested_amount,0);
   document.getElementById('acc-stats').style.display=sugg.length?'grid':'none';
@@ -2012,7 +2030,7 @@ function _renderAccrualsNow(){
       <div class="acc-vendor">${esc(s.vendor)} <span class="tag tag-gl">${esc(s.account)}</span>${s.nameChanged?`<span class="badge" style="background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border);margin-left:6px">⚠ Name Changed</span>`:''}
       </div>
       ${s.nameChanged?`<div style="font-size:11px;color:var(--yellow);margin-bottom:4px;font-weight:500">⚠ Vendor name changed: historical name "<strong>${esc(s.histNames)}</strong>" → current period name "<strong>${esc(s.currVendorName)}</strong>". Same vendor — actuals combined. Verify in NetSuite.</div>`:''}
-      <div class="acc-meta"><span class="badge ${bc}">${s.confidence} risk</span>${fb}${s.gl_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL Mismatch — Review Coding</span>`:s.dept_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept Mismatch — Review Coding</span>`:''}${s.fcst_missing?`<span class="badge" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-border)">📋 Not in Adaptive — Add Forecast</span>`:''}${s.no_ap_history?`<span class="badge" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)">⚠ Forecast Only — ${s.no_ap_history_reason==='no-ap-actuals'?'No AP Actuals':'Immaterial AP History'}</span>`:''}${s.vendor_name_mismatch?`<span class="badge" style="background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border)">⚠ Vendor Name Not Exact</span>`:''}<span>Dept: ${esc(s.dept)||'—'}</span>${s.bu?`<span>BU: ${esc(s.bu)}</span>`:''}<span>${s.periods_seen}/${s.lookback_count} months (${Math.round(s.frequency*100)}%)</span>${s.cc?`<span>CC: ${esc(s.cc)}</span>`:''}</div>
+      <div class="acc-meta"><span class="badge ${bc}">${s.confidence} risk</span>${fb}${s.gl_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ GL Mismatch — Review Coding</span>`:s.dept_mismatch?`<span class="badge" style="background:var(--yellow-light);color:var(--yellow);border:1px solid var(--yellow-border)">⚠ Dept Mismatch — Review Coding</span>`:''}${s.fcst_missing?`<span class="badge" style="background:var(--blue-light);color:var(--blue);border:1px solid var(--blue-border)">📋 Not in Adaptive — Add Forecast</span>`:''}${s.no_ap_history?`<span class="badge" style="background:var(--red-light);color:var(--red);border:1px solid var(--red-border)">⚠ Forecast Only — ${s.no_ap_history_reason==='no-ap-actuals'?'No AP Actuals':'Immaterial AP History'}</span>`:''}${s.vendor_name_mismatch?`<span class="badge" style="background:var(--purple-light);color:var(--purple);border:1px solid var(--purple-border)">⚠ Vendor Name Not Exact</span>`:''}<span>Dept: ${esc(s.dept)||'—'}</span>${s.bu?`<span>BU: ${esc(buLabels(s.bu))}</span>`:''}<span>${s.periods_seen}/${s.lookback_count} months (${Math.round(s.frequency*100)}%)</span>${s.cc?`<span>CC: ${esc(s.cc)}</span>`:''}</div>
       <div class="acc-amounts" style="grid-template-columns:repeat(5,1fr)">
         <div class="acc-amt-cell"><div class="acc-amt-label">Current Month</div><div class="acc-amt-val ${s.curr_month>0&&s.curr_month<s.six_mo_avg*0.5?'highlight':''}">${fmtF(s.curr_month)}</div></div>
         <div class="acc-amt-cell"><div class="acc-amt-label">Prior Month</div><div class="acc-amt-val">${fmtF(s.prior_month)}</div></div>
@@ -2654,7 +2672,7 @@ function renderApproved(){
     <td><span class="tag tag-gl" style="font-size:10px">${esc(e.account)}</span></td>
     <td class="td-m">${esc(glName(e.account))}</td>
     <td class="td-m">${esc(e.dept)}</td>
-    <td class="td-m">${esc(e.bu)}</td>
+    <td class="td-m">${esc(buLabels(e.bu))}</td>
     <td class="td-m">${esc(e.period)}</td>
     <td class="td-r">${fmtF(e.curr)}</td>
     <td class="td-r">${fmtF(e.prior)}</td>
