@@ -834,6 +834,15 @@ function buCanon(){
   return BU_CANON;
 }
 const buLabel=v=>v?(buCanon().get(buCode(v))||v):'';
+// AP and Adaptive label the same dimension differently — "122 - Engineering
+// Operations" against a bare "122". Match on the leading numeric code where both
+// carry one, else on the text, and offer the most descriptive label of the pair.
+const dimKey=buCode;
+const canonList=vals=>{const m=new Map();
+  vals.filter(Boolean).forEach(v=>{const k=dimKey(v),c=m.get(k);
+    if(!c||String(v).length>String(c).length)m.set(k,v);});
+  return [...m.values()].sort();};
+const dimMatch=(sel,v)=>sel.some(x=>dimKey(x)===dimKey(v));
 const buLabels=v=>[...new Set(String(v||'').split(' / ').filter(Boolean).map(buLabel))].join(' / ');
 
 function initMS(id, opts, onchange){
@@ -1917,18 +1926,18 @@ function renderFcstVsAct(){
   const period=selEl.value||curP;
 
   let fcP=FC.filter(r=>r.period===period);
-  initMS('ms-fv-bu',dimVals(FC,'bu','fc'),renderFcstVsAct);
-  initMS('ms-fv-cc',dimVals(FC,'cc','fc'),renderFcstVsAct);
-  initMS('ms-fv-dept',dimVals(FC,'dept','fc'),renderFcstVsAct);
-  initMS('ms-fv-gl',dimVals(AP,'account','ap').concat(dimVals(FC,'gl_code','fc')),renderFcstVsAct);
-  fcP=msFilter(fcP,'ms-fv-bu','bu');fcP=msFilter(fcP,'ms-fv-cc','cc');
-  fcP=msFilter(fcP,'ms-fv-dept','dept');fcP=msFilter(fcP,'ms-fv-gl','gl_code');
+  // Each filter lists both systems' values collapsed onto one entry per code, and
+  // is applied to each side using that side's own field.
+  initMS('ms-fv-bu',canonList(dimVals(AP,'cls','ap').concat(dimVals(FC,'bu','fc'))),renderFcstVsAct);
+  initMS('ms-fv-cc',canonList(dimVals(AP,'cc','ap').concat(dimVals(FC,'cc','fc'),dimVals(FC,'cc_code','fc'))),renderFcstVsAct);
+  initMS('ms-fv-dept',canonList(dimVals(AP,'dept','ap').concat(dimVals(FC,'cc','fc'),dimVals(FC,'cc_code','fc'))),renderFcstVsAct);
+  initMS('ms-fv-gl',canonList(dimVals(AP,'account','ap').concat(dimVals(FC,'gl_code','fc'))),renderFcstVsAct);
   let actP=AP.filter(r=>r.period===period);
-  actP=msFilter(actP,'ms-fv-dept','dept');actP=msFilter(actP,'ms-fv-gl','account');
-  const buSel=getMS('ms-fv-bu');
-  if(buSel)actP=actP.filter(r=>buSel.includes(buLabel(r.cls)));
-  const ccSel=getMS('ms-fv-cc');
-  if(ccSel)actP=actP.filter(r=>ccSel.includes(r.cc));
+  const buSel=getMS('ms-fv-bu'), ccSel=getMS('ms-fv-cc'), dpSel=getMS('ms-fv-dept'), glSel=getMS('ms-fv-gl');
+  if(buSel){fcP=fcP.filter(r=>dimMatch(buSel,r.bu));actP=actP.filter(r=>dimMatch(buSel,r.cls));}
+  if(ccSel){fcP=fcP.filter(r=>dimMatch(ccSel,r.cc_code)||dimMatch(ccSel,r.cc));actP=actP.filter(r=>dimMatch(ccSel,r.cc));}
+  if(dpSel){fcP=fcP.filter(r=>dimMatch(dpSel,r.cc_code)||dimMatch(dpSel,r.cc));actP=actP.filter(r=>dimMatch(dpSel,r.dept));}
+  if(glSel){fcP=fcP.filter(r=>dimMatch(glSel,r.gl_code));actP=actP.filter(r=>dimMatch(glSel,r.account));}
 
   // Bucket actuals and forecast onto the planning lines
   const byLine=new Map();
