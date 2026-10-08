@@ -408,7 +408,6 @@
             <span class="filter-label">Period:</span>
             <select id="fv-period" onchange="renderFcstVsAct()"><option value="">Select period</option></select>
             <div class="ms-wrap" id="ms-fv-bu"><button class="ms-btn" onclick="toggleMS('ms-fv-bu')">BU <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fv-bu')">All</button><button onclick="clearMS('ms-fv-bu')">None</button></div></div></div>
-            <div class="ms-wrap" id="ms-fv-cc"><button class="ms-btn" onclick="toggleMS('ms-fv-cc')">Cost Center <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fv-cc')">All</button><button onclick="clearMS('ms-fv-cc')">None</button></div></div></div>
             <div class="ms-wrap" id="ms-fv-dept"><button class="ms-btn" onclick="toggleMS('ms-fv-dept')">Department <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fv-dept')">All</button><button onclick="clearMS('ms-fv-dept')">None</button></div></div></div>
             <div class="ms-wrap" id="ms-fv-gl"><button class="ms-btn" onclick="toggleMS('ms-fv-gl')">GL Code <span class="ms-cnt"></span>▾</button><div class="ms-dropdown"><div class="ms-search"><input placeholder="Search…" oninput="filterMSList(this)"></div><div class="ms-list"></div><div class="ms-footer"><button onclick="selectAllMS('ms-fv-gl')">All</button><button onclick="clearMS('ms-fv-gl')">None</button></div></div></div>
             <button class="btn btn-sm ml-auto" onclick="expFcst()">Export CSV</button>
@@ -1928,14 +1927,17 @@ function renderFcstVsAct(){
   let fcP=FC.filter(r=>r.period===period);
   // Each filter lists both systems' values collapsed onto one entry per code, and
   // is applied to each side using that side's own field.
+  // Department is the one org dimension here — AP's department and Adaptive's cost
+  // centre are the same thing, matched on their numeric code. The list is built
+  // from AP departments plus Adaptive's cost-centre CODE only: Adaptive's cost
+  // centre NAME often carries no code, so including it produced entries that
+  // could never match an AP row and silently emptied the actuals.
   initMS('ms-fv-bu',canonList(dimVals(AP,'cls','ap').concat(dimVals(FC,'bu','fc'))),renderFcstVsAct);
-  initMS('ms-fv-cc',canonList(dimVals(AP,'cc','ap').concat(dimVals(FC,'cc','fc'),dimVals(FC,'cc_code','fc'))),renderFcstVsAct);
-  initMS('ms-fv-dept',canonList(dimVals(AP,'dept','ap').concat(dimVals(FC,'cc','fc'),dimVals(FC,'cc_code','fc'))),renderFcstVsAct);
+  initMS('ms-fv-dept',canonList(dimVals(AP,'dept','ap').concat(dimVals(FC,'cc_code','fc'))),renderFcstVsAct);
   initMS('ms-fv-gl',canonList(dimVals(AP,'account','ap').concat(dimVals(FC,'gl_code','fc'))),renderFcstVsAct);
   let actP=AP.filter(r=>r.period===period);
-  const buSel=getMS('ms-fv-bu'), ccSel=getMS('ms-fv-cc'), dpSel=getMS('ms-fv-dept'), glSel=getMS('ms-fv-gl');
+  const buSel=getMS('ms-fv-bu'), dpSel=getMS('ms-fv-dept'), glSel=getMS('ms-fv-gl');
   if(buSel){fcP=fcP.filter(r=>dimMatch(buSel,r.bu));actP=actP.filter(r=>dimMatch(buSel,r.cls));}
-  if(ccSel){fcP=fcP.filter(r=>dimMatch(ccSel,r.cc_code)||dimMatch(ccSel,r.cc));actP=actP.filter(r=>dimMatch(ccSel,r.cc));}
   if(dpSel){fcP=fcP.filter(r=>dimMatch(dpSel,r.cc_code)||dimMatch(dpSel,r.cc));actP=actP.filter(r=>dimMatch(dpSel,r.dept));}
   if(glSel){fcP=fcP.filter(r=>dimMatch(glSel,r.gl_code));actP=actP.filter(r=>dimMatch(glSel,r.account));}
 
