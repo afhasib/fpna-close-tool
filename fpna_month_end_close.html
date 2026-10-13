@@ -688,6 +688,10 @@
 <script>
 // ── STATE ──────────────────────────────────────────────
 let AP=[], FC=[], FC_PERIODS=[], LOG=[], ACC_DEC={}, COMMENTARY={};
+// What the last Adaptive upload found for contract start dates. Null means the
+// forecast on file predates renewal parsing, so the rows carry no start month at
+// all and the chart should say so rather than quietly showing nothing.
+let FC_META=null;
 let DB=null;
 const DB_NAME='fpna_close_db', DB_VER=1, STORE='kv';
 
@@ -753,7 +757,7 @@ async function save(){
   // Primary: IndexedDB (no size limit — handles 40K+ AP records)
   try{
     if(!DB)DB=await openDB();
-    await dbSet('AP',AP);await dbSet('FC',FC);await dbSet('FC_PERIODS',FC_PERIODS);
+    await dbSet('AP',AP);await dbSet('FC',FC);await dbSet('FC_PERIODS',FC_PERIODS);await dbSet('FC_META',FC_META);
     await dbSet('LOG',LOG);await dbSet('ACC_DEC',ACC_DEC);await dbSet('COMMENTARY',COMMENTARY);
   }catch(e){console.warn('IndexedDB save failed:',e);}
   // Secondary: localStorage for small items only (decisions, commentary)
@@ -767,6 +771,7 @@ async function load(){
     const ap=await dbGet('AP');if(ap)AP=ap;
     const fc=await dbGet('FC');if(fc)FC=fc;
     const fcp=await dbGet('FC_PERIODS');if(fcp)FC_PERIODS=fcp;
+    const fcm=await dbGet('FC_META');if(fcm)FC_META=fcm;
     const log=await dbGet('LOG');if(log)LOG=log;
     const dec=await dbGet('ACC_DEC');if(dec)ACC_DEC=dec;
     const com=await dbGet('COMMENTARY');if(com)COMMENTARY=com;
@@ -788,7 +793,7 @@ async function load(){
 
 async function clearAll(){
   if(!confirm('Clear all data? This cannot be undone.'))return;
-  AP=[];FC=[];FC_PERIODS=[];LOG=[];ACC_DEC={};COMMENTARY={};
+  AP=[];FC=[];FC_PERIODS=[];LOG=[];ACC_DEC={};COMMENTARY={};FC_META=null;
   await save();
   refreshAll();
   document.getElementById('ap-fb').style.display='none';
@@ -801,12 +806,29 @@ const fmtF=n=>{if(isNaN(n))return'—';return(n<0?'(':'')+'$'+Math.abs(n).toLoca
 const fmtP=n=>{if(isNaN(n)||!isFinite(n))return'—';return(n>0?'+':'')+n.toFixed(1)+'%';};
 const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const parseAmt=s=>{const n=parseFloat(String(s||'').replace(/[$,() ]/g,''));return isNaN(n)?0:(String(s).includes('(')&&!String(s).startsWith('-')?-n:n);};
+// Month key from whatever a period or date column holds. The explicit patterns run
+// BEFORE new Date(): "2026-03-01" is parsed by Date as UTC midnight, which in any
+// negative-offset timezone reads back as 29 Feb locally and silently files a
+// 1st-of-the-month contract start under the wrong month.
 function toYM(s){
   if(!s)return null;
+  s=String(s).trim();if(!s)return null;
   const mo={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
-  const m1=String(s).match(/^([a-zA-Z]{3})[\s\-](\d{4})$/i);if(m1)return m1[2]+'-'+(mo[m1[1].toLowerCase()]||'01');
-  const d=new Date(s);if(!isNaN(d.getTime()))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-  const m2=String(s).match(/(\d{4})[-\/](\d{1,2})/);if(m2)return m2[1]+'-'+String(m2[2]).padStart(2,'0');
+  const mn=x=>mo[String(x).slice(0,3).toLowerCase()];
+  const pad=x=>String(parseInt(x,10)).padStart(2,'0');
+  let m;
+  if(m=s.match(/^([a-zA-Z]{3,9})[\s\-\/,.]*(\d{4})$/)){if(mn(m[1]))return m[2]+'-'+mn(m[1]);}      // Jan-2026, May 2026
+  if(m=s.match(/^(\d{4})[-\/.](\d{1,2})(?:[-\/.]\d{1,2})?/)){return m[1]+'-'+pad(m[2]);}            // 2026-03, 2026-03-01
+  if(m=s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/)){                                        // 3/1/2026, 03-01-26
+    const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+pad(m[1]);}
+  if(m=s.match(/^(\d{1,2})[-\s\/]([a-zA-Z]{3,9})[-\s\/](\d{2,4})/)){                                // 01-Mar-2026
+    if(mn(m[2])){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+mn(m[2]);}}
+  if(m=s.match(/^([a-zA-Z]{3,9})[\s\-]+(\d{1,2}),?\s+(\d{4})/)){if(mn(m[1]))return m[3]+'-'+mn(m[1]);} // Mar 1, 2026
+  // Last resort. Gated on the string actually carrying a 4-digit year, because
+  // Date() happily reads a truncated cell like "Aug 1" as the year 2001.
+  if(/\b(19|20)\d{2}\b/.test(s)){
+    const d=new Date(s);if(!isNaN(d.getTime()))return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
   return null;
 }
 const toML=p=>{if(!p)return'';const[y,m]=p.split('-');const n=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return(n[parseInt(m)-1]||'')+' '+"'"+y.slice(2);};
@@ -1071,7 +1093,7 @@ function handleFcst(event){
       const moRe=/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[\s\-]?\d{4}$/i;
       const moCols=hdr.filter(h=>moRe.test(h.trim()));
       if(!moCols.length){showFB('fc-fb','No monthly columns found (e.g. Jan-2026).','warn');return;}
-      const c={gl_code:findC(hdr,'gl account code','gl code','account code'),gl_name:findC(hdr,'gl account name','gl name','account name'),bu:findC(hdr,'bu code','bu ','bunit'),cc:findC(hdr,'cost center name','cost center name'),cc_code:findC(hdr,'cost center code','cc code'),dept:findC(hdr,'cost center owner name','owner name','department','dept'),vc:findC(hdr,'vendor - fp&a code','vendor fp&a code','vendor code'),vn:findC(hdr,'vendor - fp&a name','vendor fp&a name','vendor name'),budget:findC(hdr,'budget id code','budget id'),comments:findC(hdr,'comments','comment'),start:findC(hdr,'contract start date','contract start','start date','renewal date','renewal month','term start')};
+      const c={gl_code:findC(hdr,'gl account code','gl code','account code'),gl_name:findC(hdr,'gl account name','gl name','account name'),bu:findC(hdr,'bu code','bu ','bunit'),cc:findC(hdr,'cost center name','cost center name'),cc_code:findC(hdr,'cost center code','cc code'),dept:findC(hdr,'cost center owner name','owner name','department','dept'),vc:findC(hdr,'vendor - fp&a code','vendor fp&a code','vendor code'),vn:findC(hdr,'vendor - fp&a name','vendor fp&a name','vendor name'),budget:findC(hdr,'budget id code','budget id'),comments:findC(hdr,'comments','comment'),start:findC(hdr,'contract start','start date','start month','renewal date','renewal month','renewal','term start','effective date','subscription start','agreement start','begin date','contract date','start')};
       const parsed=[];
       rows.forEach(row=>{
         moCols.forEach(mc=>{
@@ -1081,12 +1103,21 @@ function handleFcst(event){
       });
       FC=parsed.filter(r=>r.period);
       FC_PERIODS=[...new Set(FC.map(r=>r.period))].filter(Boolean).sort();
+      // Remember what the start-date column gave us so the chart can explain an
+      // empty renewal layer: no column, a column nothing parsed out of, or dates.
+      FC_META={startCol:c.start||null,
+               startRows:new Set(FC.filter(r=>r.renew).map(r=>r.vendor_name+'|'+r.renew)).size,
+               headers:hdr};
       LOG.unshift({type:'Forecast (M8)',file:file.name,date:new Date().toLocaleDateString(),records:parsed.length,periods:FC_PERIODS.slice(0,3).join(', ')+'…'});
       await save();
       buildVendorMatchTable();
       buildAttnData();
       refreshAll();
-      showFB('fc-fb',`✓ Loaded ${parsed.length.toLocaleString()} forecast rows across ${FC_PERIODS.length} months.`,'ok');
+      const rn=FC_META.startCol
+        ?(FC_META.startRows?` Contract start dates read from "${FC_META.startCol}" — ${FC_META.startRows} contract${FC_META.startRows===1?'':'s'} dated.`
+                           :` Column "${FC_META.startCol}" found but no dates parsed from it.`)
+        :' No contract start-date column found, so renewals are not flagged.';
+      showFB('fc-fb',`✓ Loaded ${parsed.length.toLocaleString()} forecast rows across ${FC_PERIODS.length} months.`+rn,'ok');
     }catch(err){showFB('fc-fb','Error: '+err.message,'warn');}
   };
   r.readAsText(file);event.target.value='';
@@ -1163,25 +1194,45 @@ function renderSpendChart(d,apPeriods){
 
   const bars=actP.map(p=>({p,v:mt[p]||0,kind:'act'})).concat(fcP.map(p=>({p,v:ft[p]||0,kind:'fcst'})));
 
-  // Contract renewals: the month a contract starts, from the Adaptive start-date
-  // column. Scanned across all forecast rows, not just the forward window, since a
-  // renewal can land in a month already closed. Same dimension filters as the bars.
-  const inWindow=new Set(bars.map(b=>b.p));
-  let rsrc=FC.filter(r=>r.renew&&inWindow.has(r.renew));
+  // Contract renewals, from the Adaptive start-date column. A contract comes up
+  // for renewal on its anniversary, so the flag is every month in the window whose
+  // calendar month matches a contract's start month and that falls on or after the
+  // contract began — a term that started Mar 2024 flags Mar '26 and Mar '27, not
+  // only an exact in-window start date. Same dimension filters as the bars, and
+  // deduped by vendor+start first because FC carries one row per month column.
+  let rsrc=FC.filter(r=>r.renew);
   if(vSel){const nv=new Set(vSel.map(normalize));rsrc=rsrc.filter(r=>nv.has(normalize(r.vendor_name)));}
   if(gSel)rsrc=rsrc.filter(r=>dimMatch(gSel,r.gl_code));
   if(dSel)rsrc=rsrc.filter(r=>dimMatch(dSel,r.cc_code)||dimMatch(dSel,r.cc));
+  const seen=new Set(), contracts=[];
+  rsrc.forEach(r=>{const v=r.vendor_name||'(unnamed)',k=v+'|'+r.renew;
+    if(seen.has(k))return;seen.add(k);contracts.push({v,start:r.renew});});
   const renewals=new Map();
-  rsrc.forEach(r=>{if(!renewals.has(r.renew))renewals.set(r.renew,new Set());
-    renewals.get(r.renew).add(r.vendor_name||'(unnamed)');});
-  bars.forEach(b=>{b.renew=renewals.has(b.p)?[...renewals.get(b.p)].sort():null;});
+  contracts.forEach(c=>{const sm=c.start.slice(5);
+    bars.forEach(b=>{if(b.p.slice(5)!==sm||b.p<c.start)return;
+      if(!renewals.has(b.p))renewals.set(b.p,new Map());
+      // keep the earliest start if a vendor shows up on several lines
+      const m=renewals.get(b.p),prev=m.get(c.v);
+      if(!prev||c.start<prev)m.set(c.v,c.start);});});
+  bars.forEach(b=>{b.renew=renewals.has(b.p)
+    ?[...renewals.get(b.p)].sort((x,y)=>x[0].localeCompare(y[0])).map(([v,s])=>({v,s}))
+    :null;});
   const anyRenew=bars.some(b=>b.renew);
   document.getElementById('a-ch-amos').textContent=`last ${actP.length} month${actP.length===1?'':'s'}`;
   document.getElementById('a-ch-fmos').textContent=fcP.length?`next ${fcP.length} month${fcP.length===1?'':'s'}`:'none loaded';
   const lgR=document.getElementById('a-ch-renew');
   if(lgR)lgR.style.display=anyRenew?'inline-flex':'none';
+  // Say why the renewal layer is empty rather than leaving the user hunting for it
+  let rnote='';
+  if(FC.length&&!anyRenew){
+    if(!FC_META)rnote='Re-upload the Adaptive forecast to pick up contract start dates.';
+    else if(!FC_META.startCol)rnote='No contract start-date column in the Adaptive file — renewals not flagged.';
+    else if(!FC_META.startRows)rnote=`No dates parsed from "${FC_META.startCol}" — renewals not flagged.`;
+    else rnote='No contract renewals fall in this window.';
+  }
   document.getElementById('a-ch-note').textContent=
-    fcP.length?'Forecast respects the vendor, GL and department filters.':'Upload an Adaptive forecast to see forward months.';
+    (fcP.length?'Forecast respects the vendor, GL and department filters.':'Upload an Adaptive forecast to see forward months.')
+    +(rnote?' '+rnote:'');
   if(!bars.length){host.innerHTML='<div style="padding:18px;color:var(--text3);font-size:12px">No periods to chart.</div>';return;}
 
   // Geometry: the band stretches to fill the card and scrolls once it would get
@@ -1229,9 +1280,15 @@ function renderSpendChart(d,apPeriods){
     g+=`<text x="${cx}" y="${up?ytop-6:ytop+hgt+13}" text-anchor="middle" font-size="10" font-weight="600" fill="var(--text2)" style="font-variant-numeric:tabular-nums">${esc2(lv)}</text>`;
     g+=`<text x="${cx}" y="${H-14}" text-anchor="middle" font-size="10" fill="var(--text3)">${esc2(toML(b.p))}</text>`;
     if(b.renew){
-      const pw=Math.min(BAND-8,62), px=cx-pw/2, py=PADT-42;
+      // The label has to fit inside its own band or neighbouring renewal months
+      // collide. Drop to a shorter form, then to the glyph alone, as bands narrow.
+      const fit=(txt,fs)=>txt.length*fs*0.62+10<=BAND-6;
+      let txt='↻ RENEWAL',fs=8.5;
+      if(!fit(txt,fs)){txt='RENEWAL';fs=7.5;}
+      if(!fit(txt,fs)){txt='↻';fs=9;}
+      const pw=Math.min(BAND-6,Math.max(16,txt.length*fs*0.62+10)), px=cx-pw/2, py=PADT-42;
       g+=`<rect x="${px}" y="${py}" width="${pw}" height="15" rx="7.5" fill="var(--warning)"/>`
-        +`<text x="${cx}" y="${py+11}" text-anchor="middle" font-size="8.5" font-weight="700" fill="#3d2a00" letter-spacing=".3">↻ RENEWAL</text>`;
+        +`<text x="${cx}" y="${py+11}" text-anchor="middle" font-size="${fs}" font-weight="700" fill="#3d2a00" letter-spacing=".3">${txt}</text>`;
     }
     g+=`<rect class="mc-hit" x="${PADL+BAND*i}" y="${PADT-44}" width="${BAND}" height="${H-PADT+44-26}" fill="transparent" data-i="${i}" style="cursor:default"/>`;
   });
@@ -1254,7 +1311,9 @@ function renderSpendChart(d,apPeriods){
     if(!el){tip.style.display='none';return;}
     const b=SPEND_BARS[+el.dataset.i];if(!b)return;
     tip.innerHTML=`${esc(toML(b.p))} · ${b.kind==='act'?'Actual':'Forecast'}<b>${fmtF(b.v)}</b>`
-      +(b.renew?`<span style="display:block;margin-top:4px;color:var(--text2)">↻ Renews: ${esc(b.renew.slice(0,4).join(', '))}${b.renew.length>4?` +${b.renew.length-4} more`:''}</span>`:'');
+      +(b.renew?`<span style="display:block;margin-top:4px;color:var(--text2)">↻ Renews: ${
+        esc(b.renew.slice(0,4).map(r=>r.s===b.p?r.v:`${r.v} (term began ${toML(r.s)})`).join(', '))
+        }${b.renew.length>4?` +${b.renew.length-4} more`:''}</span>`:'');
     tip.style.display='block';
     tip.style.left=Math.min(window.innerWidth-tip.offsetWidth-10,e.clientX+14)+'px';
     tip.style.top=Math.max(8,e.clientY-42)+'px';
