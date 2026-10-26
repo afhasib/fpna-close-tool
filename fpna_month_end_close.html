@@ -1218,6 +1218,22 @@ function getAPF(){
 // and their GLs and departments listed. A vendor carrying two genuinely different
 // start months is two contracts. Shared by the spend chart's renewal flags and
 // the Contract Renewals view so the two can never disagree.
+// Resellers: vendors we buy other people's software through. AP only ever sees
+// the reseller, so Adaptive names the real product in the comment — "SHI
+// INTERNATIONAL CORP." with "Jetbrains", "Logic Monitor renewal", "Splunk -
+// Civic - Per A&M reduced it in FY26". Add a pattern here to treat another
+// supplier the same way.
+const RESELLERS=[/\bSHI\b/i,/TRACE\s?3/i,/SYCOMP/i];
+const isReseller=v=>RESELLERS.some(re=>re.test(v||''));
+// Pull the product out of the comment: everything before the narrative that
+// follows a dashed separator, less a trailing parenthetical or the word
+// "renewal", which is what these comments habitually trail.
+function underlyingFrom(cmt){
+  let s=String(cmt||'').split(/\s[-–—]\s/)[0].trim();
+  s=s.replace(/\s*\([^)]*\)\s*$/,'').trim();
+  s=s.replace(/\s+(renewals?|subscriptions?|licen[cs]es?|support)$/i,'').trim();
+  return s.length>40?s.slice(0,39).trim()+'…':s;
+}
 // Does this month count as a renewal for this contract? An end date names the
 // month outright; a start-date fallback renews on its anniversary.
 const isRenewMonth=(c,p)=>c.basis==='end'
@@ -1257,11 +1273,16 @@ function buildContracts(){
     // supplier in the comment instead ("Celebrite", "raindrop.ai - Dan
     // negotiated this…"). Take the first clause of the comment rather than
     // listing them all as one anonymous contract.
-    const fromCmt=r.vendor_name?'':String(r.comments||'').split(/\s[-–]\s/)[0].trim().split(/\s+/).slice(0,3).join(' ');
-    const v=r.vendor_name||fromCmt||'(no vendor name)', k=normalize(v)+'|'+r.renew;
+    const fromCmt=r.vendor_name?'':underlyingFrom(r.comments).split(/\s+/).slice(0,3).join(' ');
+    const v=r.vendor_name||fromCmt||'(no vendor name)';
+    // Through a reseller, the product named in the comment is the contract. Five
+    // SHI lines ending the same month are five contracts, not one, so the
+    // underlying name is part of the key as well as the label.
+    const under=r.vendor_name&&isReseller(v)?underlyingFrom(r.comments):'';
+    const k=normalize(v)+'|'+normalize(under)+'|'+r.renew;
     let c=by.get(k);
     if(!c)by.set(k,c={v,renew:r.renew,basis:r.renewBasis||'start',termStart:r.termStart||null,
-                      named:!!r.vendor_name,comment:r.comments||'',
+                      named:!!r.vendor_name,comment:r.comments||'',under,
                       gls:new Set(),glNames:new Set(),depts:new Set(),
                       bus:new Set(),aliases:new Set(),glAmt:new Map(),fcstBy:new Map()});
     c.aliases.add(v);
@@ -1388,6 +1409,7 @@ function renderContracts(){
       const idx=CT_ROWS.indexOf(c);
       h+=`<tr class="ct-row" data-i="${idx}" style="cursor:pointer" title="Click for the month-by-month detail">`
         +`<td style="font-weight:600">${esc(c.v)}`
+          +(c.under?` <span style="font-weight:500;color:var(--text2)" title="Bought through ${esc(c.v)}. Adaptive names the product in the comment: ${esc(c.comment)}">(${esc(c.under)})</span>`:'')
           +(c.named?'':`<span title="This forecast line has no vendor name in Adaptive. The name shown is taken from its comment: ${esc(c.comment)}" style="margin-left:6px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3);font-size:9px;font-weight:700">FROM COMMENT</span>`)
           +(c.aliases.size>1?`<span style="color:var(--text3);font-weight:400"> +${c.aliases.size-1} alias</span>`:'')
           +(c.fuzzy?`<span title="Actuals matched to a vendor spelled differently in AP (${Math.round(c.fuzzyScore*100)}% match). Check the two names line up." style="margin-left:6px;padding:1px 5px;border-radius:3px;background:var(--warning);color:#3d2a00;font-size:9px;font-weight:700">~ NAME</span>`:'')
@@ -1427,7 +1449,8 @@ function drillContract(i){
   const c=CT_ROWS[i];if(!c)return;
   const months=c.actP.concat(c.fcP);
   document.getElementById('drill-icon').textContent='↻';
-  document.getElementById('drill-title').textContent=`${c.v} — renews ${toML(c.next)}`;
+  document.getElementById('drill-title').textContent=
+    `${c.v}${c.under?` (${c.under})`:''} — renews ${toML(c.next)}`;
   document.getElementById('drill-sub').textContent=
     (c.basis==='end'?`Term ends ${toML(c.renew)} (Adaptive end date)`:`Projected from the start date ${toML(c.renew)} — no end date in Adaptive`)
     +(c.termStart&&c.basis==='end'?` · term began ${toML(c.termStart)}`:'')
@@ -1454,11 +1477,11 @@ function drillContract(i){
 }
 
 function expContracts(){
-  const rows=[['Renewal Month','Vendor','P&L Line','GL','All GLs','Department','BU',
+  const rows=[['Renewal Month','Vendor','Underlying Product (reseller)','P&L Line','GL','All GLs','Department','BU',
                'Renewal Month From','Adaptive End Date','Adaptive Start Date',
                'Months Out','Actuals Last 12 Mo','Forecast Next 12 Mo','Change',
                'Contracts For This Vendor','Actuals Repeat Across Rows','AP Name Matched Fuzzily']];
-  CT_ROWS.forEach(c=>rows.push([toML(c.next),c.v,c.lineName,c.gl,[...c.gls].join(' | '),
+  CT_ROWS.forEach(c=>rows.push([toML(c.next),c.v,c.under||'',c.lineName,c.gl,[...c.gls].join(' | '),
     [...c.depts].join(' | '),[...c.bus].join(' | '),
     c.basis==='end'?'End date':'Start date (projected)',
     c.basis==='end'?toML(c.renew):'',toML(c.termStart||''),
@@ -1503,7 +1526,7 @@ function renderSpendChart(d,apPeriods){
   contracts.forEach(c=>bars.forEach(b=>{
     if(!isRenewMonth(c,b.p))return;
     if(!renewals.has(b.p))renewals.set(b.p,new Map());
-    renewals.get(b.p).set(c.v,c.basis);}));
+    renewals.get(b.p).set(c.v+(c.under?` (${c.under})`:''),c.basis);}));
   bars.forEach(b=>{b.renew=renewals.has(b.p)
     ?[...renewals.get(b.p)].sort((x,y)=>x[0].localeCompare(y[0])).map(([v,s])=>({v,s}))
     :null;});
