@@ -424,7 +424,7 @@
               <table id="ct-table">
                 <thead><tr>
                   <th>Vendor</th><th>P&amp;L line</th><th>GL</th><th>Department</th><th>BU</th>
-                  <th>Term began</th><th class="td-r">Actuals · last 12 mo</th>
+                  <th>Renewal month</th><th class="td-r">Actuals · last 12 mo</th>
                   <th class="td-r">Forecast · next 12 mo</th><th class="td-r">Change</th>
                 </tr></thead>
                 <tbody id="ct-tbody"></tbody>
@@ -1126,30 +1126,39 @@ function handleFcst(event){
       const moRe=/^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[\s\-]?\d{4}$/i;
       const moCols=hdr.filter(h=>moRe.test(h.trim()));
       if(!moCols.length){showFB('fc-fb','No monthly columns found (e.g. Jan-2026).','warn');return;}
-      const c={gl_code:findC(hdr,'gl account code','gl code','account code'),gl_name:findC(hdr,'gl account name','gl name','account name'),bu:findC(hdr,'bu code','bu ','bunit'),cc:findC(hdr,'cost center name','cost center name'),cc_code:findC(hdr,'cost center code','cc code'),dept:findC(hdr,'cost center owner name','owner name','department','dept'),vc:findC(hdr,'vendor - fp&a code','vendor fp&a code','vendor code'),vn:findC(hdr,'vendor - fp&a name','vendor fp&a name','vendor name'),budget:findC(hdr,'budget id code','budget id'),comments:findC(hdr,'comments','comment'),start:findC(hdr,'contract start','start date','start month','renewal date','renewal month','renewal','term start','effective date','subscription start','agreement start','begin date','contract date','start')};
+      const c={gl_code:findC(hdr,'gl account code','gl code','account code'),gl_name:findC(hdr,'gl account name','gl name','account name'),bu:findC(hdr,'bu code','bu ','bunit'),cc:findC(hdr,'cost center name','cost center name'),cc_code:findC(hdr,'cost center code','cc code'),dept:findC(hdr,'cost center owner name','owner name','department','dept'),vc:findC(hdr,'vendor - fp&a code','vendor fp&a code','vendor code'),vn:findC(hdr,'vendor - fp&a name','vendor fp&a name','vendor name'),budget:findC(hdr,'budget id code','budget id'),comments:findC(hdr,'comments','comment'),start:findC(hdr,'contract start','start date','start month','term start','effective date','subscription start','agreement start','begin date'),
+        end:findC(hdr,'contract end','end date','end month','term end','expiration date','expiry date','expires','renewal date','renewal month','contract renewal')};
       const parsed=[];
       rows.forEach(row=>{
         moCols.forEach(mc=>{
           const amt=parseAmt(row[mc]);
-          parsed.push({gl_code:(row[c.gl_code]||'').trim(),gl_name:(row[c.gl_name]||'').trim(),bu:(row[c.bu]||'').trim(),cc:(row[c.cc]||'').trim(),cc_code:(row[c.cc_code]||'').trim(),dept:(row[c.dept]||'').trim(),vendor_code:(row[c.vc]||'').trim(),vendor_name:(row[c.vn]||'').trim(),budget:(row[c.budget]||'').trim(),comments:(row[c.comments]||'').trim(),renew:toYM((row[c.start]||'').trim()),period:toYM(mc),amount:amt});
+          parsed.push({gl_code:(row[c.gl_code]||'').trim(),gl_name:(row[c.gl_name]||'').trim(),bu:(row[c.bu]||'').trim(),cc:(row[c.cc]||'').trim(),cc_code:(row[c.cc_code]||'').trim(),dept:(row[c.dept]||'').trim(),vendor_code:(row[c.vc]||'').trim(),vendor_name:(row[c.vn]||'').trim(),budget:(row[c.budget]||'').trim(),comments:(row[c.comments]||'').trim(),termStart:toYM((row[c.start]||'').trim()),termEnd:toYM((row[c.end]||'').trim()),
+            // The renewal month is the month the term ends. Where a line has no end
+            // date, fall back to the start month and project its anniversary.
+            renew:toYM((row[c.end]||'').trim())||toYM((row[c.start]||'').trim()),
+            renewBasis:toYM((row[c.end]||'').trim())?'end':'start',
+            period:toYM(mc),amount:amt});
         });
       });
       FC=parsed.filter(r=>r.period);
       FC_PERIODS=[...new Set(FC.map(r=>r.period))].filter(Boolean).sort();
-      // Remember what the start-date column gave us so the chart can explain an
-      // empty renewal layer: no column, a column nothing parsed out of, or dates.
-      FC_META={startCol:c.start||null,
-               startRows:new Set(FC.filter(r=>r.renew).map(r=>r.vendor_name+'|'+r.renew)).size,
-               headers:hdr};
+      // Remember what the date columns gave us so an empty renewal layer can say
+      // which case it is: no column, a column nothing parsed out of, or dates.
+      const uniq=f=>new Set(FC.filter(r=>r[f]).map(r=>r.vendor_name+'|'+r[f])).size;
+      FC_META={endCol:c.end||null,endRows:uniq('termEnd'),
+               startCol:c.start||null,startRows:uniq('termStart'),
+               rows:uniq('renew'),headers:hdr};
       LOG.unshift({type:'Forecast (M8)',file:file.name,date:new Date().toLocaleDateString(),records:parsed.length,periods:FC_PERIODS.slice(0,3).join(', ')+'…'});
       await save();
       buildVendorMatchTable();
       buildAttnData();
       refreshAll();
-      const rn=FC_META.startCol
-        ?(FC_META.startRows?` Contract start dates read from "${FC_META.startCol}" — ${FC_META.startRows} contract${FC_META.startRows===1?'':'s'} dated.`
-                           :` Column "${FC_META.startCol}" found but no dates parsed from it.`)
-        :' No contract start-date column found, so renewals are not flagged.';
+      const M=FC_META;
+      const rn=M.endRows?` Renewal months read from the end date in "${M.endCol}" — ${M.endRows} contract${M.endRows===1?'':'s'} dated.`
+        :M.endCol?` Column "${M.endCol}" found but no end dates parsed from it.`
+        +(M.startRows?` Falling back to the start date in "${M.startCol}" for ${M.startRows}.`:'')
+        :M.startRows?` No contract end-date column found. Falling back to the start date in "${M.startCol}" — ${M.startRows} contract${M.startRows===1?'':'s'} dated.`
+        :' No contract end-date or start-date column found, so renewals are not flagged.';
       showFB('fc-fb',`✓ Loaded ${parsed.length.toLocaleString()} forecast rows across ${FC_PERIODS.length} months.`+rn,'ok');
     }catch(err){showFB('fc-fb','Error: '+err.message,'warn');}
   };
@@ -1209,6 +1218,11 @@ function getAPF(){
 // and their GLs and departments listed. A vendor carrying two genuinely different
 // start months is two contracts. Shared by the spend chart's renewal flags and
 // the Contract Renewals view so the two can never disagree.
+// Does this month count as a renewal for this contract? An end date names the
+// month outright; a start-date fallback renews on its anniversary.
+const isRenewMonth=(c,p)=>c.basis==='end'
+  ?p===c.renew
+  :(p.slice(5)===c.renew.slice(5)&&p>=c.renew);
 function nextAnniv(start,anchor){
   if(start>=anchor)return start;                       // term begins in the future
   const sm=start.slice(5), ay=+anchor.slice(0,4);
@@ -1241,7 +1255,8 @@ function buildContracts(){
   rsrc.forEach(r=>{
     const v=r.vendor_name||'(unnamed)', k=normalize(v)+'|'+r.renew;
     let c=by.get(k);
-    if(!c)by.set(k,c={v,start:r.renew,gls:new Set(),glNames:new Set(),depts:new Set(),
+    if(!c)by.set(k,c={v,renew:r.renew,basis:r.renewBasis||'start',termStart:r.termStart||null,
+                      gls:new Set(),glNames:new Set(),depts:new Set(),
                       bus:new Set(),aliases:new Set(),glAmt:new Map(),fcstBy:new Map()});
     c.aliases.add(v);
     if(r.gl_code)c.gls.add(r.gl_code);
@@ -1271,7 +1286,12 @@ function buildContracts(){
     if(!c.actBy)c.actBy=new Map();
     c.act12=sum(c.actBy);
     c.fcst12=sum(c.fcstBy);
-    c.next=nextAnniv(c.start,anchor);
+    // The renewal month is the Adaptive end month, used exactly as it appears —
+    // an end date already states when the term runs out, so there is nothing to
+    // infer. Only a line that has no end date falls back to projecting its start
+    // month forward to the next anniversary.
+    c.next=c.basis==='end'?c.renew:nextAnniv(c.renew,anchor);
+    c.past=c.next&&c.next<anchor;
     // classify on the GL carrying most of the forecast, so a contract that touches
     // a stray GL is not filed under it
     const dom=[...c.glAmt.entries()].sort((a,b)=>b[1]-a[1])[0];
@@ -1310,13 +1330,13 @@ function renderContracts(){
   const anchor=all.length?all[0].anchor:'';
   let rows=all.filter(c=>c.next);
   if(sel.value)rows=rows.filter(c=>c.line===sel.value);
-  if(win)rows=rows.filter(c=>monthsBetween(anchor,c.next)<win);
+  if(win)rows=rows.filter(c=>{const n=monthsBetween(anchor,c.next);return n>=0&&n<win;});
   CT_ROWS=rows;
 
   document.getElementById('ct-scope').textContent=anchor
     ?`Renewal months counted from the ${toML(anchor)} close. Actuals are the 12 months to ${toML(anchor)}.`:'';
 
-  const soon=rows.filter(c=>monthsBetween(anchor,c.next)<3);
+  const soon=rows.filter(c=>{const n=monthsBetween(anchor,c.next);return n>=0&&n<3;});
   const gap=rows.filter(c=>c.fcst12===0);
   document.getElementById('ct-n').textContent=rows.length||'—';
   document.getElementById('ct-n-sub').textContent=`${new Set(rows.map(c=>c.v)).size} vendors`;
@@ -1328,12 +1348,17 @@ function renderContracts(){
   // Say why the table is empty rather than showing a bare "no rows"
   const note=document.getElementById('ct-note');
   let msg='';
+  const M=FC_META;
   if(!AP.length||!FC.length)msg='Upload AP Details and an Adaptive forecast to build the renewal calendar.';
-  else if(!FC_META)msg='Re-upload the Adaptive forecast to pick up contract start dates — the forecast on file was loaded before this existed.';
-  else if(!FC_META.startCol)msg='No contract start-date column in the Adaptive file, so there are no contracts to list.';
-  else if(!FC_META.startRows)msg=`No dates parsed from "${FC_META.startCol}", so there are no contracts to list.`;
+  else if(!M||M.rows===undefined)msg='Re-upload the Adaptive forecast to pick up contract end dates — the forecast on file was loaded before this existed.';
+  else if(!M.endCol&&!M.startCol)msg='No contract end-date or start-date column in the Adaptive file, so there are no contracts to list.';
+  else if(!M.rows)msg=`No dates parsed from "${M.endCol||M.startCol}", so there are no contracts to list.`;
   else if(!all.length)msg='No contracts match the filters set above the chart.';
   else if(!rows.length)msg='No contracts renew in this window. Widen it or clear the P&L line filter.';
+  // End dates that have already passed sit behind the current close, so say how
+  // many the window is holding back rather than letting them vanish.
+  const past=all.filter(c=>c.past).length;
+  if(!msg&&win&&past)msg=`${past} contract${past===1?' has':'s have'} an Adaptive end date on or before the ${toML(anchor)} close and so sit${past===1?'s':''} outside this window — switch to "All renewal months" to see ${past===1?'it':'them'}.`;
   note.style.display=msg?'block':'none';note.textContent=msg;
 
   // Grouped by renewal month, biggest contract first inside each month
@@ -1342,7 +1367,7 @@ function renderContracts(){
   let h='';
   [...byMonth.keys()].sort().forEach(m=>{
     const g=byMonth.get(m), tot=g.reduce((s,c)=>s+c.fcst12,0), n=monthsBetween(anchor,m);
-    const when=n<=0?'this close':n===1?'next month':`in ${n} months`;
+    const when=n<0?`expired ${-n} month${n===-1?'':'s'} ago`:n===0?'this close':n===1?'next month':`in ${n} months`;
     h+=`<tr style="background:var(--surface2)"><td colspan="9" style="padding:9px 12px;font-weight:700;font-size:12px;border-top:2px solid var(--border-strong)">`
       +`<span style="color:var(--accent)">↻ ${esc(toML(m))}</span> `
       +`<span style="font-weight:500;color:var(--text3);margin-left:10px">${g.length} contract${g.length===1?'':'s'} · ${esc(when)} · ${esc(fmt(tot))} forecast</span></td></tr>`;
@@ -1355,10 +1380,15 @@ function renderContracts(){
           +(c.fuzzy?`<span title="Actuals matched to a vendor spelled differently in AP (${Math.round(c.fuzzyScore*100)}% match). Check the two names line up." style="margin-left:6px;padding:1px 5px;border-radius:3px;background:var(--warning);color:#3d2a00;font-size:9px;font-weight:700">~ NAME</span>`:'')
           +`</td>`
         +`<td class="td-m">${esc(c.lineName)}</td>`
-        +`<td><span class="tag tag-gl">${esc(c.gl)}</span>${c.gls.size>1?`<span style="color:var(--text3)"> +${c.gls.size-1}</span>`:''}</td>`
+        // Adaptive's GL code column often carries the whole account string; show
+        // the number and keep the name in the tooltip so the column stays narrow
+        +`<td><span class="tag tag-gl" title="${esc(c.gl)}">${esc(isNaN(glNum(c.gl))?c.gl:glNum(c.gl))}</span>${c.gls.size>1?`<span style="color:var(--text3)" title="${esc([...c.gls].join(' · '))}"> +${c.gls.size-1}</span>`:''}</td>`
         +`<td class="td-m">${esc([...c.depts][0]||'—')}${c.depts.size>1?`<span style="color:var(--text3)"> +${c.depts.size-1}</span>`:''}</td>`
         +`<td class="td-m">${esc([...c.bus].join(', ')||'—')}</td>`
-        +`<td class="td-m">${esc(toML(c.start))}</td>`
+        +`<td class="td-m" style="font-weight:600;color:var(--text)">${esc(toML(c.next))}`
+          +(c.basis==='end'?''
+            :`<span title="No contract end date in Adaptive for this line, so the renewal month is projected from its start date (${esc(toML(c.renew))})." style="margin-left:6px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3);font-size:9px;font-weight:700">FROM START</span>`)
+          +`</td>`
         +`<td class="td-r">${fmtF(c.act12)}${c.siblings>1
             ?`<span title="${esc(c.v)} is on ${c.siblings} contracts with different term starts. AP cannot say which invoice belonged to which, so this is the vendor's whole 12-month spend and it repeats on each of its rows — do not add the column up." style="margin-left:6px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3);font-size:9px;font-weight:700">VENDOR TOTAL</span>`
             :''}</td>`
@@ -1386,7 +1416,9 @@ function drillContract(i){
   document.getElementById('drill-icon').textContent='↻';
   document.getElementById('drill-title').textContent=`${c.v} — renews ${toML(c.next)}`;
   document.getElementById('drill-sub').textContent=
-    `Term began ${toML(c.start)} · ${c.lineName} · GL ${[...c.gls].join(', ')||'—'} · ${[...c.depts].join(', ')||'no department'}`
+    (c.basis==='end'?`Term ends ${toML(c.renew)} (Adaptive end date)`:`Projected from the start date ${toML(c.renew)} — no end date in Adaptive`)
+    +(c.termStart&&c.basis==='end'?` · term began ${toML(c.termStart)}`:'')
+    +` · ${c.lineName} · GL ${[...c.gls].join(', ')||'—'} · ${[...c.depts].join(', ')||'no department'}`
     +(c.aliases.size>1?` · also invoiced as ${[...c.aliases].filter(a=>a!==c.v).join(', ')}`:'');
   document.getElementById('drill-total').textContent=fmtF(c.fcst12);
   document.getElementById('drill-total').style.color='var(--blue)';
@@ -1398,7 +1430,7 @@ function drillContract(i){
   document.getElementById('drill-tbody').innerHTML=months.map((p,k)=>{
     const act=c.actP.includes(p);
     const v=act?(c.actBy.get(p)||0):(c.fcstBy.get(p)||0);
-    const isR=p.slice(5)===c.start.slice(5)&&p>=c.start;
+    const isR=isRenewMonth(c,p);
     return `<tr style="border-top:1px solid var(--border);background:${isR?'rgba(250,178,25,0.13)':k%2?'var(--surface2)':''}">`
       +`<td style="padding:7px 12px;font-weight:600">${esc(toML(p))}</td>`
       +`<td style="padding:7px 12px;color:var(--text3)">${act?'Actual':'Forecast'}</td>`
@@ -1409,11 +1441,14 @@ function drillContract(i){
 }
 
 function expContracts(){
-  const rows=[['Renewal Month','Vendor','P&L Line','GL','All GLs','Department','BU','Term Began',
+  const rows=[['Renewal Month','Vendor','P&L Line','GL','All GLs','Department','BU',
+               'Renewal Month From','Adaptive End Date','Adaptive Start Date',
                'Months Out','Actuals Last 12 Mo','Forecast Next 12 Mo','Change',
                'Contracts For This Vendor','Actuals Repeat Across Rows','AP Name Matched Fuzzily']];
   CT_ROWS.forEach(c=>rows.push([toML(c.next),c.v,c.lineName,c.gl,[...c.gls].join(' | '),
-    [...c.depts].join(' | '),[...c.bus].join(' | '),toML(c.start),
+    [...c.depts].join(' | '),[...c.bus].join(' | '),
+    c.basis==='end'?'End date':'Start date (projected)',
+    c.basis==='end'?toML(c.renew):'',toML(c.termStart||''),
     monthsBetween(c.anchor,c.next),c.act12.toFixed(2),c.fcst12.toFixed(2),(c.fcst12-c.act12).toFixed(2),
     c.siblings,c.siblings>1?'YES':'',c.fuzzy||'']));
   dlCSV(rows,'contract_renewals.csv');
@@ -1448,17 +1483,14 @@ function renderSpendChart(d,apPeriods){
   const bars=actP.map(p=>({p,v:mt[p]||0,kind:'act'})).concat(fcP.map(p=>({p,v:ft[p]||0,kind:'fcst'})));
 
   // Contract renewals. A contract comes up for renewal on its anniversary, so the
-  // flag is every month in the window whose calendar month matches a contract's
-  // term start and that falls on or after it — a term that started Mar 2024 flags
-  // Mar '26 and Mar '27, not only an exact in-window start date.
+  // flag is the month a term ends, straight from Adaptive. Only a line with no end
+  // date falls back to projecting its start month forward to each anniversary.
   const contracts=buildContracts();
   const renewals=new Map();
-  contracts.forEach(c=>{const sm=c.start.slice(5);
-    bars.forEach(b=>{if(b.p.slice(5)!==sm||b.p<c.start)return;
-      if(!renewals.has(b.p))renewals.set(b.p,new Map());
-      // keep the earliest start if a vendor shows up on several lines
-      const m=renewals.get(b.p),prev=m.get(c.v);
-      if(!prev||c.start<prev)m.set(c.v,c.start);});});
+  contracts.forEach(c=>bars.forEach(b=>{
+    if(!isRenewMonth(c,b.p))return;
+    if(!renewals.has(b.p))renewals.set(b.p,new Map());
+    renewals.get(b.p).set(c.v,c.basis);}));
   bars.forEach(b=>{b.renew=renewals.has(b.p)
     ?[...renewals.get(b.p)].sort((x,y)=>x[0].localeCompare(y[0])).map(([v,s])=>({v,s}))
     :null;});
@@ -1557,7 +1589,7 @@ function renderSpendChart(d,apPeriods){
     const b=SPEND_BARS[+el.dataset.i];if(!b)return;
     tip.innerHTML=`${esc(toML(b.p))} · ${b.kind==='act'?'Actual':'Forecast'}<b>${fmtF(b.v)}</b>`
       +(b.renew?`<span style="display:block;margin-top:4px;color:var(--text2)">↻ Renews: ${
-        esc(b.renew.slice(0,4).map(r=>r.s===b.p?r.v:`${r.v} (term began ${toML(r.s)})`).join(', '))
+        esc(b.renew.slice(0,4).map(r=>r.s==='end'?r.v:`${r.v} (from start date)`).join(', '))
         }${b.renew.length>4?` +${b.renew.length-4} more`:''}</span>`:'');
     tip.style.display='block';
     tip.style.left=Math.min(window.innerWidth-tip.offsetWidth-10,e.clientX+14)+'px';
