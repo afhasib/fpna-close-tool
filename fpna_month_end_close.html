@@ -398,6 +398,39 @@
           <div class="inner-tabs">
             <button class="inner-tab active" onclick="switchAV('summary')">Summary</button>
             <button class="inner-tab" onclick="switchAV('detail')">Transaction Detail</button>
+            <button class="inner-tab" onclick="switchAV('contracts')">↻ Contract Renewals</button>
+          </div>
+          <div id="av-contracts" style="display:none">
+            <div class="filter-bar">
+              <span class="filter-label">P&amp;L line:</span>
+              <select id="ct-line" onchange="renderContracts()" style="font-size:12px"></select>
+              <select id="ct-win" onchange="renderContracts()" style="font-size:12px">
+                <option value="12">Next 12 months</option>
+                <option value="3">Next 3 months</option>
+                <option value="6">Next 6 months</option>
+                <option value="0">All renewal months</option>
+              </select>
+              <span id="ct-scope" style="font-size:12px;color:var(--text3)"></span>
+              <button class="btn btn-sm ml-auto" onclick="expContracts()">Export CSV</button>
+            </div>
+            <div class="stats s4 mb12">
+              <div class="stat sv-accent"><div class="stat-label">Contracts</div><div class="stat-value" id="ct-n">—</div><div class="stat-sub" id="ct-n-sub">&nbsp;</div></div>
+              <div class="stat sv-yellow"><div class="stat-label">Renewing in 90 days</div><div class="stat-value" id="ct-soon">—</div><div class="stat-sub" id="ct-soon-sub">&nbsp;</div></div>
+              <div class="stat"><div class="stat-label">Forecast · next 12 mo</div><div class="stat-value" id="ct-fcst">—</div><div class="stat-sub">Adaptive, contracts in view</div></div>
+              <div class="stat sv-red"><div class="stat-label">No forward forecast</div><div class="stat-value" id="ct-gap">—</div><div class="stat-sub">Renewing with $0 planned</div></div>
+            </div>
+            <div id="ct-note" class="alert al-info mb12" style="display:none"></div>
+            <div class="table-wrap">
+              <table id="ct-table">
+                <thead><tr>
+                  <th>Vendor</th><th>P&amp;L line</th><th>GL</th><th>Department</th><th>BU</th>
+                  <th>Term began</th><th class="td-r">Actuals · last 12 mo</th>
+                  <th class="td-r">Forecast · next 12 mo</th><th class="td-r">Change</th>
+                </tr></thead>
+                <tbody id="ct-tbody"></tbody>
+              </table>
+            </div>
+            <div id="ct-foot" style="display:none;margin-top:8px;font-size:11px;color:var(--text3);line-height:1.5"></div>
           </div>
           <div id="av-summary">
             <div class="grid2">
@@ -1151,7 +1184,10 @@ function popSel(id,opts,cur){const el=document.getElementById(id);if(!el)return;
 
 // ── AP ACTUALS ────────────────────────────────────────
 let AV='summary';
-function switchAV(v){AV=v;document.getElementById('av-summary').style.display=v==='summary'?'block':'none';document.getElementById('av-detail').style.display=v==='detail'?'block':'none';document.querySelectorAll('#page-actuals .inner-tab').forEach((t,i)=>t.classList.toggle('active',['summary','detail'][i]===v));renderActuals();}
+function switchAV(v){AV=v;
+  ['summary','detail','contracts'].forEach(k=>document.getElementById('av-'+k).style.display=v===k?'block':'none');
+  document.querySelectorAll('#page-actuals .inner-tab').forEach((t,i)=>t.classList.toggle('active',['summary','detail','contracts'][i]===v));
+  renderActuals();}
 
 function getAPF(){
   let d=[...AP];
@@ -1164,6 +1200,223 @@ function getAPF(){
   d=msFilter(d,'ms-af-cc','cc');
   d=msFilter(d,'ms-af-type','type');
   return d;
+}
+
+// ── CONTRACTS ─────────────────────────────────────────────────────────────────
+// One contract = one vendor + one term start month, from the Adaptive start-date
+// column. A vendor's forecast is normally split over several GL / cost-centre
+// lines that share a start date; that is one contract, so the lines are rolled up
+// and their GLs and departments listed. A vendor carrying two genuinely different
+// start months is two contracts. Shared by the spend chart's renewal flags and
+// the Contract Renewals view so the two can never disagree.
+function nextAnniv(start,anchor){
+  if(start>=anchor)return start;                       // term begins in the future
+  const sm=start.slice(5), ay=+anchor.slice(0,4);
+  for(let y=ay;y<=ay+2;y++){const c=y+'-'+sm;if(c>=anchor)return c;}
+  return null;
+}
+function buildContracts(){
+  if(!FC.length||!AP.length)return [];
+  const apP=[...new Set(AP.map(r=>r.period))].filter(Boolean).sort();
+  const anchor=apP[apP.length-1];                      // the close period we sit in
+  const actP=apP.slice(-12);
+  const fcP=[...new Set(FC.map(r=>r.period))].filter(p=>p>anchor).sort().slice(0,12);
+
+  // The tab's own filters, matched on the Adaptive side the same way the bars are
+  const vSel=getMS('ms-af-vendor'),gSel=getMS('ms-af-gl'),dSel=getMS('ms-af-dept');
+  let rsrc=FC.filter(r=>r.renew);
+  if(vSel){const nv=new Set(vSel.map(normalize));rsrc=rsrc.filter(r=>nv.has(normalize(r.vendor_name)));}
+  if(gSel)rsrc=rsrc.filter(r=>dimMatch(gSel,r.gl_code));
+  if(dSel)rsrc=rsrc.filter(r=>dimMatch(dSel,r.cc_code)||dimMatch(dSel,r.cc));
+  if(!rsrc.length)return [];
+
+  // Actuals keyed on the normalised vendor, which is what lets AP's "AMAZON WEB
+  // SERVICES LLC" roll up against Adaptive's "AMAZON WEB SERVICES INC".
+  const actBy=new Map(), inAct=new Set(actP);
+  AP.forEach(r=>{if(!inAct.has(r.period))return;
+    const k=normalize(r.vendor);let m=actBy.get(k);if(!m)actBy.set(k,m=new Map());
+    m.set(r.period,(m.get(r.period)||0)+r.amount);});
+
+  const inFc=new Set(fcP), by=new Map();
+  rsrc.forEach(r=>{
+    const v=r.vendor_name||'(unnamed)', k=normalize(v)+'|'+r.renew;
+    let c=by.get(k);
+    if(!c)by.set(k,c={v,start:r.renew,gls:new Set(),glNames:new Set(),depts:new Set(),
+                      bus:new Set(),aliases:new Set(),glAmt:new Map(),fcstBy:new Map()});
+    c.aliases.add(v);
+    if(r.gl_code)c.gls.add(r.gl_code);
+    if(r.gl_name)c.glNames.add(r.gl_name);
+    const dp=r.cc||r.cc_code||r.dept;if(dp)c.depts.add(dp);
+    if(r.bu)c.bus.add(r.bu);
+    if(inFc.has(r.period)){
+      c.fcstBy.set(r.period,(c.fcstBy.get(r.period)||0)+r.amount);
+      if(r.gl_code)c.glAmt.set(r.gl_code,(c.glAmt.get(r.gl_code)||0)+r.amount);
+    }
+  });
+
+  const sum=m=>[...m.values()].reduce((s,v)=>s+v,0);
+  const apKeys=[...actBy.keys()];
+  return [...by.values()].map(c=>{
+    // Exact on the normalised name first — that is what lets AP's "AMAZON WEB
+    // SERVICES LLC" meet Adaptive's "INC". Fall back to the app's trigram match so
+    // a contract is not shown as $0 actuals purely because the spellings drifted,
+    // and flag it so the user can see the two names were not identical.
+    const nv=normalize(c.v);
+    c.actBy=actBy.get(nv);
+    if(!c.actBy){
+      let best=0,bk=null;
+      apKeys.forEach(k=>{const s=trigramSim(nv,k);if(s>best){best=s;bk=k;}});
+      if(best>=0.85){c.actBy=actBy.get(bk);c.fuzzy=bk;c.fuzzyScore=best;}
+    }
+    if(!c.actBy)c.actBy=new Map();
+    c.act12=sum(c.actBy);
+    c.fcst12=sum(c.fcstBy);
+    c.next=nextAnniv(c.start,anchor);
+    // classify on the GL carrying most of the forecast, so a contract that touches
+    // a stray GL is not filed under it
+    const dom=[...c.glAmt.entries()].sort((a,b)=>b[1]-a[1])[0];
+    c.gl=dom?dom[0]:[...c.gls][0]||'';
+    c.line=plLineFor(c.gl)||'other';
+    c.lineName=(PL_LINES.find(l=>l.id===c.line)||{}).name||'Other Expenses';
+    c.anchor=anchor;c.actP=actP;c.fcP=fcP;
+    return c;
+  }).map((c,_,arr)=>{
+    // A vendor on two terms is two contracts, but AP does not say which invoice
+    // belonged to which, so each row carries the vendor's whole 12-month spend.
+    // Count the siblings so the row can say so and nobody sums the column blind.
+    c.siblings=arr.filter(x=>normalize(x.v)===normalize(c.v)).length;
+    return c;
+  }).sort((a,b)=>(a.next||'9999').localeCompare(b.next||'9999')||b.fcst12-a.fcst12);
+}
+
+// ── CONTRACT RENEWALS VIEW ────────────────────────────────────────────────────
+// A renewal calendar: every contract listed once, under the month its term next
+// comes up, with what it actually cost over the last twelve closed months and
+// what Adaptive has planned for the next twelve.
+const monthsBetween=(a,b)=>(+b.slice(0,4)-+a.slice(0,4))*12+(+b.slice(5)-+a.slice(5));
+let CT_ROWS=[];
+function renderContracts(){
+  const all=buildContracts();
+  const sel=document.getElementById('ct-line');
+  // the P&L line list follows whatever is actually in view, so it never offers an
+  // option that would empty the table
+  const present=PL_LINES.filter(l=>all.some(c=>c.line===l.id));
+  const keep=sel.value;
+  sel.innerHTML='<option value="">All P&amp;L lines</option>'
+    +present.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('');
+  sel.value=present.some(l=>l.id===keep)?keep:'';
+
+  const win=+document.getElementById('ct-win').value;
+  const anchor=all.length?all[0].anchor:'';
+  let rows=all.filter(c=>c.next);
+  if(sel.value)rows=rows.filter(c=>c.line===sel.value);
+  if(win)rows=rows.filter(c=>monthsBetween(anchor,c.next)<win);
+  CT_ROWS=rows;
+
+  document.getElementById('ct-scope').textContent=anchor
+    ?`Renewal months counted from the ${toML(anchor)} close. Actuals are the 12 months to ${toML(anchor)}.`:'';
+
+  const soon=rows.filter(c=>monthsBetween(anchor,c.next)<3);
+  const gap=rows.filter(c=>c.fcst12===0);
+  document.getElementById('ct-n').textContent=rows.length||'—';
+  document.getElementById('ct-n-sub').textContent=`${new Set(rows.map(c=>c.v)).size} vendors`;
+  document.getElementById('ct-soon').textContent=soon.length||'—';
+  document.getElementById('ct-soon-sub').textContent=soon.length?fmt(soon.reduce((s,c)=>s+c.fcst12,0))+' forecast':' ';
+  document.getElementById('ct-fcst').textContent=fmt(rows.reduce((s,c)=>s+c.fcst12,0));
+  document.getElementById('ct-gap').textContent=gap.length||'—';
+
+  // Say why the table is empty rather than showing a bare "no rows"
+  const note=document.getElementById('ct-note');
+  let msg='';
+  if(!AP.length||!FC.length)msg='Upload AP Details and an Adaptive forecast to build the renewal calendar.';
+  else if(!FC_META)msg='Re-upload the Adaptive forecast to pick up contract start dates — the forecast on file was loaded before this existed.';
+  else if(!FC_META.startCol)msg='No contract start-date column in the Adaptive file, so there are no contracts to list.';
+  else if(!FC_META.startRows)msg=`No dates parsed from "${FC_META.startCol}", so there are no contracts to list.`;
+  else if(!all.length)msg='No contracts match the filters set above the chart.';
+  else if(!rows.length)msg='No contracts renew in this window. Widen it or clear the P&L line filter.';
+  note.style.display=msg?'block':'none';note.textContent=msg;
+
+  // Grouped by renewal month, biggest contract first inside each month
+  const byMonth=new Map();
+  rows.forEach(c=>{if(!byMonth.has(c.next))byMonth.set(c.next,[]);byMonth.get(c.next).push(c);});
+  let h='';
+  [...byMonth.keys()].sort().forEach(m=>{
+    const g=byMonth.get(m), tot=g.reduce((s,c)=>s+c.fcst12,0), n=monthsBetween(anchor,m);
+    const when=n<=0?'this close':n===1?'next month':`in ${n} months`;
+    h+=`<tr style="background:var(--surface2)"><td colspan="9" style="padding:9px 12px;font-weight:700;font-size:12px;border-top:2px solid var(--border-strong)">`
+      +`<span style="color:var(--accent)">↻ ${esc(toML(m))}</span> `
+      +`<span style="font-weight:500;color:var(--text3);margin-left:10px">${g.length} contract${g.length===1?'':'s'} · ${esc(when)} · ${esc(fmt(tot))} forecast</span></td></tr>`;
+    g.forEach((c,i)=>{
+      const chg=c.fcst12-c.act12;
+      const idx=CT_ROWS.indexOf(c);
+      h+=`<tr class="ct-row" data-i="${idx}" style="cursor:pointer" title="Click for the month-by-month detail">`
+        +`<td style="font-weight:600">${esc(c.v)}`
+          +(c.aliases.size>1?`<span style="color:var(--text3);font-weight:400"> +${c.aliases.size-1} alias</span>`:'')
+          +(c.fuzzy?`<span title="Actuals matched to a vendor spelled differently in AP (${Math.round(c.fuzzyScore*100)}% match). Check the two names line up." style="margin-left:6px;padding:1px 5px;border-radius:3px;background:var(--warning);color:#3d2a00;font-size:9px;font-weight:700">~ NAME</span>`:'')
+          +`</td>`
+        +`<td class="td-m">${esc(c.lineName)}</td>`
+        +`<td><span class="tag tag-gl">${esc(c.gl)}</span>${c.gls.size>1?`<span style="color:var(--text3)"> +${c.gls.size-1}</span>`:''}</td>`
+        +`<td class="td-m">${esc([...c.depts][0]||'—')}${c.depts.size>1?`<span style="color:var(--text3)"> +${c.depts.size-1}</span>`:''}</td>`
+        +`<td class="td-m">${esc([...c.bus].join(', ')||'—')}</td>`
+        +`<td class="td-m">${esc(toML(c.start))}</td>`
+        +`<td class="td-r">${fmtF(c.act12)}${c.siblings>1
+            ?`<span title="${esc(c.v)} is on ${c.siblings} contracts with different term starts. AP cannot say which invoice belonged to which, so this is the vendor's whole 12-month spend and it repeats on each of its rows — do not add the column up." style="margin-left:6px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3);font-size:9px;font-weight:700">VENDOR TOTAL</span>`
+            :''}</td>`
+        +`<td class="td-r" style="color:${c.fcst12?'var(--blue)':'var(--text3)'}">${c.fcst12?fmtF(c.fcst12):'none planned'}</td>`
+        +`<td class="td-r" style="color:${chg>0?'var(--red)':chg<0?'var(--green)':'var(--text3)'}">${c.fcst12||c.act12?fmtF(chg):'—'}</td>`
+        +`</tr>`;
+    });
+  });
+  document.getElementById('ct-tbody').innerHTML=h;
+  const multi=rows.filter(c=>c.siblings>1).length;
+  document.getElementById('ct-foot').innerHTML=multi
+    ?`${multi} row${multi===1?'':'s'} marked <b>VENDOR TOTAL</b>: that vendor holds more than one contract, and AP cannot say which invoice belonged to which term, so its full 12-month spend repeats on each of its rows. The forecast column is per contract and does not repeat.`
+    :'';
+  document.getElementById('ct-foot').style.display=multi?'block':'none';
+}
+document.addEventListener('click',e=>{
+  const tr=e.target.closest&&e.target.closest('tr.ct-row');
+  if(tr)drillContract(+tr.dataset.i);
+});
+
+// Month-by-month actuals and forecast for one contract
+function drillContract(i){
+  const c=CT_ROWS[i];if(!c)return;
+  const months=c.actP.concat(c.fcP);
+  document.getElementById('drill-icon').textContent='↻';
+  document.getElementById('drill-title').textContent=`${c.v} — renews ${toML(c.next)}`;
+  document.getElementById('drill-sub').textContent=
+    `Term began ${toML(c.start)} · ${c.lineName} · GL ${[...c.gls].join(', ')||'—'} · ${[...c.depts].join(', ')||'no department'}`
+    +(c.aliases.size>1?` · also invoiced as ${[...c.aliases].filter(a=>a!==c.v).join(', ')}`:'');
+  document.getElementById('drill-total').textContent=fmtF(c.fcst12);
+  document.getElementById('drill-total').style.color='var(--blue)';
+  document.getElementById('drill-count').textContent=
+    `forecast over the next 12 months · ${fmtF(c.act12)} actual over the last 12`;
+  document.getElementById('drill-thead').innerHTML=
+    `<tr><th style="padding:8px 12px">Month</th><th style="padding:8px 12px">Side of close</th>`
+    +`<th style="padding:8px 12px;text-align:right">Amount</th><th style="padding:8px 12px">Renewal</th></tr>`;
+  document.getElementById('drill-tbody').innerHTML=months.map((p,k)=>{
+    const act=c.actP.includes(p);
+    const v=act?(c.actBy.get(p)||0):(c.fcstBy.get(p)||0);
+    const isR=p.slice(5)===c.start.slice(5)&&p>=c.start;
+    return `<tr style="border-top:1px solid var(--border);background:${isR?'rgba(250,178,25,0.13)':k%2?'var(--surface2)':''}">`
+      +`<td style="padding:7px 12px;font-weight:600">${esc(toML(p))}</td>`
+      +`<td style="padding:7px 12px;color:var(--text3)">${act?'Actual':'Forecast'}</td>`
+      +`<td style="padding:7px 12px;text-align:right;font-weight:600;color:${act?'var(--accent)':'var(--blue)'}">${fmtF(v)}</td>`
+      +`<td style="padding:7px 12px;font-weight:700;color:#8a6200">${isR?'↻ renews':''}</td></tr>`;
+  }).join('');
+  document.getElementById('drill-modal').style.display='block';
+}
+
+function expContracts(){
+  const rows=[['Renewal Month','Vendor','P&L Line','GL','All GLs','Department','BU','Term Began',
+               'Months Out','Actuals Last 12 Mo','Forecast Next 12 Mo','Change',
+               'Contracts For This Vendor','Actuals Repeat Across Rows','AP Name Matched Fuzzily']];
+  CT_ROWS.forEach(c=>rows.push([toML(c.next),c.v,c.lineName,c.gl,[...c.gls].join(' | '),
+    [...c.depts].join(' | '),[...c.bus].join(' | '),toML(c.start),
+    monthsBetween(c.anchor,c.next),c.act12.toFixed(2),c.fcst12.toFixed(2),(c.fcst12-c.act12).toFixed(2),
+    c.siblings,c.siblings>1?'YES':'',c.fuzzy||'']));
+  dlCSV(rows,'contract_renewals.csv');
 }
 
 // ── MONTHLY SPEND CHART ───────────────────────────────────────────────────────
@@ -1194,19 +1447,11 @@ function renderSpendChart(d,apPeriods){
 
   const bars=actP.map(p=>({p,v:mt[p]||0,kind:'act'})).concat(fcP.map(p=>({p,v:ft[p]||0,kind:'fcst'})));
 
-  // Contract renewals, from the Adaptive start-date column. A contract comes up
-  // for renewal on its anniversary, so the flag is every month in the window whose
-  // calendar month matches a contract's start month and that falls on or after the
-  // contract began — a term that started Mar 2024 flags Mar '26 and Mar '27, not
-  // only an exact in-window start date. Same dimension filters as the bars, and
-  // deduped by vendor+start first because FC carries one row per month column.
-  let rsrc=FC.filter(r=>r.renew);
-  if(vSel){const nv=new Set(vSel.map(normalize));rsrc=rsrc.filter(r=>nv.has(normalize(r.vendor_name)));}
-  if(gSel)rsrc=rsrc.filter(r=>dimMatch(gSel,r.gl_code));
-  if(dSel)rsrc=rsrc.filter(r=>dimMatch(dSel,r.cc_code)||dimMatch(dSel,r.cc));
-  const seen=new Set(), contracts=[];
-  rsrc.forEach(r=>{const v=r.vendor_name||'(unnamed)',k=v+'|'+r.renew;
-    if(seen.has(k))return;seen.add(k);contracts.push({v,start:r.renew});});
+  // Contract renewals. A contract comes up for renewal on its anniversary, so the
+  // flag is every month in the window whose calendar month matches a contract's
+  // term start and that falls on or after it — a term that started Mar 2024 flags
+  // Mar '26 and Mar '27, not only an exact in-window start date.
+  const contracts=buildContracts();
   const renewals=new Map();
   contracts.forEach(c=>{const sm=c.start.slice(5);
     bars.forEach(b=>{if(b.p.slice(5)!==sm||b.p<c.start)return;
@@ -1348,6 +1593,7 @@ function renderActuals(){
   const maxM=Math.max(...Object.values(mt),1);
   renderSpendChart(d,periods);
   if(AV==='summary'){renderBars('bars-vendor',grpSum(d,'vendor'));renderBars('bars-gl',grpSum(d,'account'));renderBars('bars-dept',grpSum(d,'dept'));}
+  else if(AV==='contracts'){renderContracts();}
   else{document.getElementById('a-tbody').innerHTML=d.slice(0,500).map(r=>`<tr><td>${esc(r.period)}</td><td class="td-m">${esc(r.sub)}</td><td style="font-weight:600">${esc(r.vendor)}</td><td><span class="tag tag-gl">${esc(r.account)}</span></td><td class="td-m">${esc(r.dept)}</td><td class="td-m">${esc(r.cc)}</td><td class="td-m">${esc(r.entity)}</td><td class="td-m">${esc(r.cls)}</td><td class="td-m">${esc(r.type)}</td><td class="td-m" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.memo)}">${esc(r.memo)}</td><td class="td-r">${fmtF(r.amount)}</td></tr>`).join('');}
 }
 function clearF(prefix){clearAllMS(prefix);renderActuals();renderSOT();}
