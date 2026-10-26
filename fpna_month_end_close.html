@@ -1253,9 +1253,15 @@ function buildContracts(){
 
   const inFc=new Set(fcP), by=new Map();
   rsrc.forEach(r=>{
-    const v=r.vendor_name||'(unnamed)', k=normalize(v)+'|'+r.renew;
+    // Some forecast lines carry a contract but no vendor name, and name the
+    // supplier in the comment instead ("Celebrite", "raindrop.ai - Dan
+    // negotiated this…"). Take the first clause of the comment rather than
+    // listing them all as one anonymous contract.
+    const fromCmt=r.vendor_name?'':String(r.comments||'').split(/\s[-–]\s/)[0].trim().split(/\s+/).slice(0,3).join(' ');
+    const v=r.vendor_name||fromCmt||'(no vendor name)', k=normalize(v)+'|'+r.renew;
     let c=by.get(k);
     if(!c)by.set(k,c={v,renew:r.renew,basis:r.renewBasis||'start',termStart:r.termStart||null,
+                      named:!!r.vendor_name,comment:r.comments||'',
                       gls:new Set(),glNames:new Set(),depts:new Set(),
                       bus:new Set(),aliases:new Set(),glAmt:new Map(),fcstBy:new Map()});
     c.aliases.add(v);
@@ -1355,10 +1361,16 @@ function renderContracts(){
   else if(!M.rows)msg=`No dates parsed from "${M.endCol||M.startCol}", so there are no contracts to list.`;
   else if(!all.length)msg='No contracts match the filters set above the chart.';
   else if(!rows.length)msg='No contracts renew in this window. Widen it or clear the P&L line filter.';
-  // End dates that have already passed sit behind the current close, so say how
-  // many the window is holding back rather than letting them vanish.
-  const past=all.filter(c=>c.past).length;
-  if(!msg&&win&&past)msg=`${past} contract${past===1?' has':'s have'} an Adaptive end date on or before the ${toML(anchor)} close and so sit${past===1?'s':''} outside this window — switch to "All renewal months" to see ${past===1?'it':'them'}.`;
+  // Nothing the window holds back should vanish silently: an end date already
+  // past is surprising, and a long tail beyond 12 months is easy to forget.
+  if(!msg&&win){
+    const past=all.filter(c=>c.past).length;
+    const far=all.filter(c=>c.next&&monthsBetween(anchor,c.next)>=win).length;
+    const bits=[];
+    if(past)bits.push(`${past} ${past===1?'has an Adaptive end date':'have Adaptive end dates'} on or before the ${toML(anchor)} close`);
+    if(far)bits.push(`${far} renew more than ${win} month${win===1?'':'s'} out`);
+    if(bits.length)msg=`Not shown: ${bits.join('; ')}. Switch to "All renewal months" to see ${past+far===1?'it':'them'}.`;
+  }
   note.style.display=msg?'block':'none';note.textContent=msg;
 
   // Grouped by renewal month, biggest contract first inside each month
@@ -1376,6 +1388,7 @@ function renderContracts(){
       const idx=CT_ROWS.indexOf(c);
       h+=`<tr class="ct-row" data-i="${idx}" style="cursor:pointer" title="Click for the month-by-month detail">`
         +`<td style="font-weight:600">${esc(c.v)}`
+          +(c.named?'':`<span title="This forecast line has no vendor name in Adaptive. The name shown is taken from its comment: ${esc(c.comment)}" style="margin-left:6px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3);font-size:9px;font-weight:700">FROM COMMENT</span>`)
           +(c.aliases.size>1?`<span style="color:var(--text3);font-weight:400"> +${c.aliases.size-1} alias</span>`:'')
           +(c.fuzzy?`<span title="Actuals matched to a vendor spelled differently in AP (${Math.round(c.fuzzyScore*100)}% match). Check the two names line up." style="margin-left:6px;padding:1px 5px;border-radius:3px;background:var(--warning);color:#3d2a00;font-size:9px;font-weight:700">~ NAME</span>`:'')
           +`</td>`
